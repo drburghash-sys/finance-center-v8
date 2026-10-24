@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f4f82">
+<title>الإدارة المالية V6 - نسخة نظيفة</title>
+<style>
+:root{--bg:#f3f6fa;--card:#fff;--text:#172033;--muted:#6b7280;--line:#dce4ee;--blue:#1769aa;--blue2:#0f4f82;--green:#178a52;--red:#b42318;--amber:#b56a00;--purple:#6d4aff}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Arial,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);overscroll-behavior-x:none}button,input,select,textarea{font:inherit}button{border:0;border-radius:12px;padding:11px 13px;font-weight:800;cursor:pointer}.primary{background:var(--blue);color:#fff}.secondary{background:#e8f2fb;color:var(--blue2)}.success{background:#e9f8ef;color:#116b3d}.danger{background:#fee4e2;color:var(--red)}.warn{background:#fff3dd;color:#8a5200}
+header{position:sticky;top:0;z-index:30;background:linear-gradient(135deg,var(--blue2),var(--blue));color:#fff;padding:14px 14px 10px;box-shadow:0 3px 12px #0002}header h1{margin:0;font-size:21px}header p{margin:4px 0 0;font-size:12px;opacity:.9}.main-tabs{display:flex;gap:7px;overflow:auto;padding-top:10px;scrollbar-width:none}.main-tabs::-webkit-scrollbar{display:none}.main-tabs button{flex:1;min-width:82px;padding:9px 10px;background:#ffffff20;color:#fff}.main-tabs button.active{background:#fff;color:var(--blue2)}
+main{max-width:980px;margin:auto;padding:14px 12px 90px}.page{display:none}.page.active{display:block}.subtabs{display:flex;gap:7px;overflow:auto;margin-bottom:12px;scrollbar-width:none}.subtabs::-webkit-scrollbar{display:none}.subtabs button{flex:1;min-width:88px;background:#e9eef5;color:#425066;padding:9px 10px}.subtabs button.active{background:var(--blue);color:#fff}.subpage{display:none}.subpage.active{display:block}
+.card{background:#fff;border:1px solid var(--line);border-radius:17px;padding:14px;margin-bottom:13px;box-shadow:0 4px 16px rgba(20,40,70,.05)}h2{margin:0 0 12px;font-size:19px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.full{grid-column:1/-1}label{display:block;font-size:13px;font-weight:800;margin-bottom:5px}input,select,textarea{width:100%;padding:11px;border:1px solid #cfd8e5;border-radius:11px;background:#fff;color:var(--text)}textarea{min-height:105px;resize:vertical}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.actions button{flex:1}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.stat{background:#f8fbfe;border:1px solid var(--line);border-radius:13px;padding:11px;text-align:center}.stat b{display:block;font-size:20px;color:var(--blue2)}.stat span{font-size:11px;color:var(--muted)}.small{font-size:12px;color:var(--muted);line-height:1.55}.row{border:1px solid var(--line);border-radius:14px;padding:11px;margin-top:8px;background:#fff}.row-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.row.paid{background:#effaf4}.row.transferred{background:#e8f7ef;border-color:#a8dbbd}.tag{display:inline-block;padding:4px 8px;border-radius:999px;background:#eef3f8;font-size:11px;margin:3px 2px}.amount{font-weight:900;color:var(--blue2)}
+.account-card{border:2px solid var(--line);border-radius:16px;padding:13px;margin-bottom:10px;background:#fff;transition:.2s}.account-card.transferred{background:#eaf8f0;border-color:#74c496}.account-card .transfer-btn{width:100%;margin-top:10px;background:#eef3f8;color:#425066}.account-card.transferred .transfer-btn{background:#178a52;color:#fff}.progress{height:11px;background:#e8edf3;border-radius:20px;overflow:hidden}.progress>div{height:100%;background:var(--green);width:0}.preview{border:2px dashed #9db3c8;border-radius:14px;padding:12px;margin-top:10px;background:#f8fbfe}.preview.good{border-color:#83c8a2;background:#f0fbf5}.preview.bad{border-color:#e2a4a0;background:#fff6f5}.log-pos{color:#117243}.log-neg{color:#a92e25}.trip-card{border:1px solid var(--line);border-radius:16px;padding:13px;margin-bottom:10px;background:#fff}.trip-card.selected{border:2px solid var(--purple);background:#faf8ff}.swipe-hint{text-align:center;color:#8793a2;font-size:11px;margin:4px 0 10px}.toast{position:fixed;left:14px;right:14px;bottom:18px;z-index:80;background:#17324d;color:#fff;padding:12px 14px;border-radius:12px;text-align:center;display:none;box-shadow:0 8px 24px #0003}.empty{text-align:center;color:var(--muted);padding:18px 8px}
+@media(max-width:700px){.grid2,.grid3{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}header h1{font-size:19px}.main-tabs button{font-size:12px;min-width:76px}.actions button{min-width:120px}}
+</style>
+
+<style id="financeBudgetPatch">
+#mainTabs button[data-page="visa"],#mainTabs button[data-page="obligations"],#mainTabs button[data-page="trips"],#page-visa,#page-obligations,#page-trips{display:none!important}
+#mainTabs{grid-template-columns:1fr!important}.finance-link-card{border:1px solid #dbe4ee;border-radius:16px;padding:13px;margin:12px 0;background:#f8fbff}.finance-link-row{display:grid;grid-template-columns:1fr 1.25fr;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #e8eef5}.finance-link-row:last-child{border-bottom:0}.finance-link-row select{width:100%;padding:9px;border:1px solid #cfd9e5;border-radius:10px;background:#fff}.sync-note{font-size:12px;color:#617086;line-height:1.7}
+</style>
+</head>
+<body>
+<header>
+  <h1>💰 الإدارة المالية V5</h1>
+  <p>الميزانية الشهرية • البنود • توزيع الحسابات • نسخ احتياطي</p>
+  <div class="main-tabs" id="mainTabs">
+    <button data-page="budget" class="active">الميزانية</button>
+    <button data-page="visa">الديون</button>
+    <button data-page="obligations">الالتزامات</button>
+    <button data-page="trips">الرحلات</button>
+  </div>
+</header>
+<main id="swipeRoot">
+<div class="swipe-hint">اسحب يمينًا أو يسارًا للتنقل</div>
+
+<section id="page-budget" class="page active" data-page="budget">
+  <div class="subtabs" data-group="budget"><button class="active" data-sub="summary">الرئيسية</button><button data-sub="items">البنود</button><button data-sub="accounts">الحسابات</button><button data-sub="categories">التصنيفات</button></div>
+  <div id="budget-summary" class="subpage active" data-subpage="summary">
+    <div class="card"><h2>ميزانية الشهر</h2><div class="grid2"><div><label>الشهر الحالي</label><input id="budgetMonth" type="month"></div><div><label>الراتب</label><input id="salary" type="number" inputmode="decimal"></div><div class="full"><label>الأشهر المحفوظة</label><select id="savedMonths" onchange="switchMonth(this.value)"></select></div></div><div class="actions"><button class="primary" onclick="saveBudgetHeader()">حفظ</button><button class="secondary" onclick="cloneNextMonth()">إنشاء الشهر القادم</button></div><div class="small" style="margin-top:9px">كل شهر يُحفظ مستقلًا، ويمكن الرجوع إليه من القائمة.</div></div>
+    <div class="card"><div class="stats"><div class="stat"><b id="stIncome">0</b><span>الدخل</span></div><div class="stat"><b id="stPlanned">0</b><span>المخطط</span></div><div class="stat"><b id="stPaid">0</b><span>تم سداده</span></div><div class="stat"><b id="stRemain">0</b><span>المتبقي</span></div></div><div class="progress" style="margin-top:12px"><div id="budgetProgress"></div></div><div id="budgetProgressText" class="small" style="margin-top:6px"></div></div>
+    <div class="card"><h2>الدخل الإضافي</h2><div class="grid2"><input id="incomeName" placeholder="اسم الدخل"><input id="incomeAmount" type="number" placeholder="المبلغ"></div><div class="actions"><button class="primary" onclick="addIncome()">إضافة دخل</button></div><div id="incomeList"></div></div>
+    <div class="card"><h2>ملخص التصنيفات</h2><div id="categorySummary"></div></div>
+    <div class="card" style="display:none" aria-hidden="true"><h2>💾 النسخة الاحتياطية</h2>
+      <p class="small">بعد الانتهاء من نقل أرقامك من البرنامج القديم، صدّر نسخة احتياطية كاملة. الملف يشمل الميزانية والديون والالتزامات والرحلات وكل السجلات.</p>
+      <div class="actions">
+        <button class="success" onclick="exportBackup()">تصدير وحفظ البيانات</button>
+        <label class="secondary" style="display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:12px;padding:11px 13px;font-weight:800">
+          استعادة البيانات
+          <input id="restoreBackupInput" type="file" accept=".json,application/json" hidden>
+        </label>
+      </div>
+      <div id="backupInfo" class="small" style="margin-top:8px"></div>
+    </div>
+  </div>
+  <div id="budget-items" class="subpage" data-subpage="items">
+    <div class="card"><h2>إضافة / تعديل بند</h2><input id="editItemId" type="hidden"><div class="grid2"><div><label>اسم البند</label><input id="itemName"></div><div><label>المبلغ</label><input id="itemAmount" type="number"></div><div><label>الحساب</label><select id="itemAccount"></select></div><div><label>التصنيف</label><select id="itemCategory"></select></div><div><label>التكرار</label><select id="itemRepeat"><option value="monthly">شهري</option><option value="annual">سنوي</option><option value="once">مرة واحدة</option></select></div><div><label>تاريخ الاستحقاق</label><input id="itemDue" type="date"></div><div class="full"><label>ملاحظات</label><input id="itemNotes"></div></div><div class="actions"><button class="primary" onclick="saveItem()">حفظ البند</button><button class="secondary" onclick="resetItemForm()">مسح</button></div></div>
+    <div class="card"><h2>البنود</h2><div id="itemsList"></div></div>
+  </div>
+  <div id="budget-accounts" class="subpage" data-subpage="accounts">
+    <div class="card"><h2>إضافة حساب</h2><div class="grid2"><input id="accountName" placeholder="اسم الحساب"><input id="accountBalance" type="number" placeholder="الرصيد الحالي"></div><div class="actions"><button class="primary" onclick="addAccount()">إضافة حساب</button></div></div>
+    <div id="accountsList"></div>
+  </div>
+  <div id="budget-categories" class="subpage" data-subpage="categories">
+    <div class="card"><h2>تصنيفات البنود</h2><div class="grid2"><input id="newCategory" placeholder="مثال: منزل، سيارات، استثمار"><button class="primary" onclick="addCategory()">إضافة تصنيف</button></div><div id="categoriesList" style="margin-top:12px"></div></div>
+  </div>
+</section>
+
+<section id="page-visa" class="page" data-page="visa">
+  <div class="subtabs" data-group="visa"><button class="active" data-sub="summary">الديون</button><button data-sub="log">السجل</button></div>
+  <div id="visa-summary" class="subpage active" data-subpage="summary">
+    <div class="card"><h2>ملخص الديون</h2><div class="stats"><div class="stat"><b id="visaDebt">0</b><span>إجمالي الديون</span></div><div class="stat"><b id="visaPaid">0</b><span>إجمالي السداد</span></div><div class="stat"><b id="visaRemaining">0</b><span>إجمالي المتبقي</span></div><div class="stat"><b id="visaTxnCount">0</b><span>العمليات</span></div></div><div class="actions"><button class="danger" onclick="resetAllDebts()">تصفير الديون</button></div></div>
+    <div class="card"><h2>إضافة دين جديد</h2><div class="grid2"><input id="newDebtName" placeholder="اسم الدين: مثال قرض، شخص، بطاقة أخرى"><input id="newDebtAmount" type="number" placeholder="قيمة الدين الحالية"></div><div class="actions"><button class="primary" onclick="addDebtAccount()">إضافة الدين</button></div></div>
+    <div class="card"><h2>الديون</h2><div id="debtsList"></div></div>
+    <div class="card">
+      <h2>تسجيل عملية على الدين</h2>
+      <div class="actions entry-methods" style="margin-bottom:12px">
+        <button id="debtDirectBtn" class="primary" onclick="showDebtEntryMode('direct')">إدخال مباشر</button>
+        <button id="debtSmsBtn" class="secondary" onclick="showDebtEntryMode('sms')">SMS</button>
+      </div>
+      <div id="debtDirectPanel">
+        <div class="grid3">
+          <select id="visaManualDebt"></select>
+          <input id="visaManualAmount" type="number" inputmode="decimal" placeholder="أدخل المبلغ">
+          <select id="visaManualType"><option value="debt">إضافة دين</option><option value="payment">إضافة سداد</option></select>
+        </div>
+        <div class="actions"><button class="primary" onclick="visaManualAdd()">حفظ المبلغ</button></div>
+      </div>
+      <div id="debtSmsPanel" class="hidden">
+        <p class="small">ضع رسالة شراء أو سداد الفيزا. يحدد البرنامج فيزا ١ أو فيزا ٢ تلقائيًا من آخر ٤ أرقام في الرسالة، وتُسجّل في مدير الحسابات والفيزا.</p>
+        <select id="visaSmsDebt" style="display:none"></select>
+        <textarea id="visaSms" placeholder="الصق رسالة البنك هنا..."></textarea>
+        <div style="display:none;margin-top:10px"><label>نوع العملية</label><select id="visaSmsType"><option value="auto">تحديد تلقائي</option><option value="debt">دين إضافي</option><option value="payment">سداد</option></select></div>
+        <div class="actions">
+          <button class="primary" onclick="routeVisaSmsToAccounts()">تحليل وتسجيل الرسالة</button>
+          <button class="secondary" onclick="document.getElementById('visaSms').value='';document.getElementById('visaPreview').innerHTML=''">مسح</button>
+        </div>
+        <div id="visaPreview"></div>
+      </div>
+    </div>
+  </div>
+  <div id="visa-log" class="subpage" data-subpage="log"><div class="card"><h2>سجل الديون</h2><div id="visaLog"></div></div></div>
+</section>
+
+<section id="page-obligations" class="page" data-page="obligations">
+  <div class="subtabs" data-group="obligations"><button class="active" data-sub="summary">الالتزامات</button><button data-sub="log">السجل</button></div>
+  <div id="obligations-summary" class="subpage active" data-subpage="summary">
+    <div class="card"><h2>صندوق الالتزامات</h2><div class="stats"><div class="stat"><b id="fundBalance">0</b><span>الرصيد الحالي</span></div><div class="stat"><b id="fundAdded">0</b><span>إجمالي الإضافات</span></div><div class="stat"><b id="fundSpent">0</b><span>إجمالي المسحوبات</span></div><div class="stat"><b id="fundTxnCount">0</b><span>العمليات</span></div></div><div class="actions"><button class="danger" onclick="resetFund()">تصفير الالتزامات</button></div></div>
+    <div class="card">
+      <h2>تسجيل عملية في الالتزامات</h2>
+      <div class="actions entry-methods" style="margin-bottom:12px">
+        <button id="fundDirectBtn" class="primary" onclick="showFundEntryMode('direct')">إدخال مباشر</button>
+        <button id="fundSmsBtn" class="secondary" onclick="showFundEntryMode('sms')">SMS</button>
+      </div>
+      <div id="fundDirectPanel">
+        <div class="grid2">
+          <input id="fundManualAmount" type="number" inputmode="decimal" placeholder="أدخل المبلغ">
+          <select id="fundManualType"><option value="add">إضافة مبلغ</option><option value="withdraw">سحب مبلغ</option></select>
+        </div>
+        <div class="actions"><button class="primary" onclick="fundManualAdd()">حفظ المبلغ</button></div>
+      </div>
+      <div id="fundSmsPanel" class="hidden">
+        <textarea id="fundSms" placeholder="الصق رسالة البنك هنا..."></textarea>
+        <div style="margin-top:10px"><label>نوع العملية</label><select id="fundSmsType"><option value="auto">تحديد تلقائي</option><option value="add">إضافة</option><option value="withdraw">سحب</option></select></div>
+        <div class="actions">
+          <button class="primary" onclick="analyzeFundSms()">تحليل الرسالة</button>
+          <button class="secondary" onclick="document.getElementById('fundSms').value='';document.getElementById('fundPreview').innerHTML=''">مسح</button>
+        </div>
+        <div id="fundPreview"></div>
+      </div>
+    </div>
+  </div>
+  <div id="obligations-log" class="subpage" data-subpage="log"><div class="card"><h2>سجل الالتزامات</h2><div id="fundLog"></div></div></div>
+</section>
+
+<section id="page-trips" class="page" data-page="trips">
+  <div class="subtabs" data-group="trips"><button class="active" data-sub="list">الرحلات</button><button data-sub="details">تفاصيل الرحلة</button></div>
+  <div id="trips-list" class="subpage active" data-subpage="list">
+    <div class="card"><h2>إضافة رحلة جديدة</h2><div class="grid2"><input id="tripName" placeholder="اسم الرحلة"><input id="tripDate" type="date"><input id="tripBudget" type="number" placeholder="ميزانية الرحلة"><input id="tripNotes" placeholder="ملاحظات"></div><div class="actions"><button class="primary" onclick="addTrip()">إضافة الرحلة</button></div></div>
+    <div id="tripsList"></div>
+  </div>
+  <div id="trips-details" class="subpage" data-subpage="details">
+    <div id="tripDetailsEmpty" class="card empty">اختر رحلة من صفحة الرحلات أولًا.</div>
+    <div id="tripDetails" class="hidden">
+      <div class="card"><h2 id="tripDetailsTitle"></h2><div class="stats"><div class="stat"><b id="tripBudgetStat">0</b><span>الميزانية</span></div><div class="stat"><b id="tripSpentStat">0</b><span>المصروف</span></div><div class="stat"><b id="tripRemainStat">0</b><span>المتبقي</span></div><div class="stat"><b id="tripExpenseCount">0</b><span>المصاريف</span></div></div><div id="tripMeta" class="small" style="margin-top:8px"></div></div>
+      <div class="card"><h2>إضافة مصروف</h2><div class="grid2"><select id="tripExpenseCategory"></select><input id="tripExpenseAmount" type="number" placeholder="المبلغ"></div><div class="actions"><button class="primary" onclick="addTripExpense()">إضافة المصروف</button></div></div><div class="card"><h2>بنود مصاريف الرحلات</h2><div class="grid2"><input id="newTripExpenseCategory" placeholder="مثال: تأشيرة، هدايا، إنترنت"><button class="primary" onclick="addTripExpenseCategory()">إضافة بند</button></div><div id="tripExpenseCategoriesList" style="margin-top:12px"></div></div>
+      <div class="card"><h2>مصاريف الرحلة</h2><div id="tripExpenses"></div></div>
+    </div>
+  </div>
+</section>
+</main>
+<div id="toast" class="toast"></div>
+<script>
+const KEY='budget_finance_clean_v4';
+const defaultCategories=['منزل','سيارات','استثمار','تعليم','اتصالات','سفر','قروض','صدقة','أخرى'];
+const fallback={"month":"2026-10","salary":47233,"incomes":[],"accounts":[{"id":"a1","name":"d360","balance":0,"transferred":false},{"id":"a2","name":"Alinma Pay","balance":0,"transferred":false},{"id":"a3","name":"Alinma Bank","balance":0,"transferred":false},{"id":"a4","name":"STC Bank","balance":0,"transferred":false},{"id":"a5","name":"NCB","balance":0,"transferred":false},{"id":"a6","name":"Darahim","balance":0,"transferred":false}],"items":[{"id":"i17883198556309h0ch","name":"الام","amount":2500,"accountId":"a1","category":"اسرة","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632j3de0","name":"مدارس","amount":1,"accountId":"a1","category":"تعليم","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632buc4k","name":"مصروف منزلي","amount":3000,"accountId":"a1","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632ha7lc","name":"الصدقة","amount":2000,"accountId":"a1","category":"صدقة","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632990k2","name":"الابناء","amount":700,"accountId":"a1","category":"اسرة","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i178831985563220b5d","name":"بنزين","amount":1500,"accountId":"a2","category":"سيارات","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i17883198556329cjbg","name":"الخادمة","amount":1000,"accountId":"a2","category":"عمالة","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632df7k6","name":"سائق","amount":1,"accountId":"a4","category":"عمالة","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632rxlk0","name":"الالتزامات","amount":4500,"accountId":"a1","category":"أخرى","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632hhgn8","name":"الكهرباء","amount":1500,"accountId":"a3","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i17883198556328gf1f","name":"الجوالات","amount":700,"accountId":"a3","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632mg6if","name":"الانترنت","amount":700,"accountId":"a3","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632407zz","name":"مياه","amount":50,"accountId":"a3","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632xv9tu","name":"خادمة امي","amount":500,"accountId":"a5","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632sw49z","name":"شقة","amount":1300,"accountId":"a1","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632vc5iq","name":"فيزا","amount":2000,"accountId":"a5","category":"قروض","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632ya4ct","name":"قروض","amount":20000,"accountId":"a5","category":"قروض","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632obkrw","name":"استثمار","amount":550,"accountId":"a6","category":"استثمار","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632uc3b2","name":"يزيد","amount":2000,"accountId":"a1","category":"اسرة","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632wqgz7","name":"اشتراك مباريات","amount":1,"accountId":"a1","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i17883198556326r05p","name":"صندوق الزوجة","amount":1350,"accountId":"a1","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i17883198556329rq2u","name":"مصروف شخصي","amount":500,"accountId":"a1","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632a1ymo","name":"احتياطي","amount":1000,"accountId":"a1","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false}],"categories":["منزل","سيارات","استثمار","تعليم","اتصالات","سفر","قروض","صدقة","أخرى","اسرة","عمالة"],"visa":{"original":0,"addedDebt":0,"paid":0,"log":[]},"fund":{"balance":0,"log":[]},"trips":[],"selectedTripId":null,"debts":[],"tripExpenseCategories":["تذاكر","سكن","مواصلات","مطاعم","أنشطة","مشتريات","أخرى"],"months":{"2026-09":{"salary":47233,"incomes":[{"id":"inc1787252885526","name":"دراهم ١","amount":755},{"id":"inc1787252898476","name":"دراهم ٢","amount":129}],"items":[{"id":"i1786417394956","name":"الام","amount":2500,"accountId":"a1","category":"اسرة","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1786417428738","name":"مدارس","amount":1,"accountId":"a1","category":"تعليم","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1786417448136","name":"مصروف منزلي","amount":3000,"accountId":"a1","category":"منزل","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1786417490542","name":"الصدقة","amount":2000,"accountId":"a1","category":"صدقة","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1786417506321","name":"الابناء","amount":300,"accountId":"a1","category":"اسرة","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1786417549446","name":"بنزين","amount":1500,"accountId":"a2","category":"سيارات","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1786417582450","name":"الخادمة","amount":1000,"accountId":"a2","category":"عمالة","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1786417611990","name":"سائق","amount":1,"accountId":"a4","category":"عمالة","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1786417650678","name":"الالتزامات","amount":4500,"accountId":"a1","category":"أخرى","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1786417671122","name":"الكهرباء","amount":1500,"accountId":"a3","category":"منزل","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1786417689825","name":"الجوالات","amount":700,"accountId":"a3","category":"منزل","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1786417708856","name":"الانترنت","amount":700,"accountId":"a3","category":"منزل","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1786417737655","name":"مياه","amount":50,"accountId":"a3","category":"منزل","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1786417774405","name":"خادمة امي","amount":500,"accountId":"a5","category":"منزل","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1786417803531","name":"شقة","amount":1300,"accountId":"a1","category":"منزل","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1786417819479","name":"فيزا","amount":2000,"accountId":"a5","category":"قروض","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1786417852360","name":"قروض","amount":20000,"accountId":"a5","category":"قروض","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1786417870578","name":"استثمار","amount":550,"accountId":"a6","category":"استثمار","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1787252315968","name":"يزيد","amount":2000,"accountId":"a1","category":"اسرة","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1787252359331","name":"اشتراك مباريات","amount":1,"accountId":"a1","category":"منزل","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1787252444761","name":"صندوق الزوجة","amount":1350,"accountId":"a1","category":"منزل","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1787252481371","name":"مصروف شخصي","amount":600,"accountId":"a1","category":"منزل","repeat":"monthly","due":"","notes":"","paid":true},{"id":"i1787252541428","name":"احتياطي","amount":1400,"accountId":"a1","category":"منزل","repeat":"monthly","due":"","notes":"","paid":true}],"accountStatus":{"a1":true,"a2":true,"a3":true,"a4":true,"a5":true,"a6":true}},"2026-10":{"salary":47233,"incomes":[],"items":[{"id":"i17883198556309h0ch","name":"الام","amount":2500,"accountId":"a1","category":"اسرة","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632j3de0","name":"مدارس","amount":1,"accountId":"a1","category":"تعليم","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632buc4k","name":"مصروف منزلي","amount":3000,"accountId":"a1","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632ha7lc","name":"الصدقة","amount":2000,"accountId":"a1","category":"صدقة","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632990k2","name":"الابناء","amount":700,"accountId":"a1","category":"اسرة","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i178831985563220b5d","name":"بنزين","amount":1500,"accountId":"a2","category":"سيارات","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i17883198556329cjbg","name":"الخادمة","amount":1000,"accountId":"a2","category":"عمالة","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632df7k6","name":"سائق","amount":1,"accountId":"a4","category":"عمالة","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632rxlk0","name":"الالتزامات","amount":4500,"accountId":"a1","category":"أخرى","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632hhgn8","name":"الكهرباء","amount":1500,"accountId":"a3","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i17883198556328gf1f","name":"الجوالات","amount":700,"accountId":"a3","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632mg6if","name":"الانترنت","amount":700,"accountId":"a3","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632407zz","name":"مياه","amount":50,"accountId":"a3","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632xv9tu","name":"خادمة امي","amount":500,"accountId":"a5","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632sw49z","name":"شقة","amount":1300,"accountId":"a1","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632vc5iq","name":"فيزا","amount":2000,"accountId":"a5","category":"قروض","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632ya4ct","name":"قروض","amount":20000,"accountId":"a5","category":"قروض","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632obkrw","name":"استثمار","amount":550,"accountId":"a6","category":"استثمار","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632uc3b2","name":"يزيد","amount":2000,"accountId":"a1","category":"اسرة","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632wqgz7","name":"اشتراك مباريات","amount":1,"accountId":"a1","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i17883198556326r05p","name":"صندوق الزوجة","amount":1350,"accountId":"a1","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i17883198556329rq2u","name":"مصروف شخصي","amount":500,"accountId":"a1","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false},{"id":"i1788319855632a1ymo","name":"احتياطي","amount":1000,"accountId":"a1","category":"منزل","repeat":"monthly","due":"","notes":"","paid":false}],"accountStatus":{"a1":false,"a2":false,"a3":false,"a4":false,"a5":false,"a6":false}}}};
+function clone(x){return JSON.parse(JSON.stringify(x))}
+function load(){
+  try{
+    const v=JSON.parse(localStorage.getItem(KEY)||'null');
+    if(v)return normalize(v);
+  }catch(e){}
+  return normalize(clone(fallback));
+}
+function normalize(s){s.categories=Array.isArray(s.categories)?[...new Set([...defaultCategories,...s.categories])]:[...defaultCategories];s.incomes=Array.isArray(s.incomes)?s.incomes:[];s.accounts=Array.isArray(s.accounts)?s.accounts:[];s.accounts=s.accounts.map(a=>({...a,transferred:!!a.transferred}));s.items=Array.isArray(s.items)?s.items:[];s.months=s.months&&typeof s.months==='object'&&!Array.isArray(s.months)?s.months:{};if(s.month&&!s.months[s.month])s.months[s.month]={salary:Number(s.salary||0),incomes:clone(s.incomes),items:clone(s.items),accountStatus:Object.fromEntries(s.accounts.map(a=>[a.id,!!a.transferred]))};s.visa=s.visa||{original:0,addedDebt:0,paid:0,log:[]};s.visa.log=Array.isArray(s.visa.log)?s.visa.log:[];
+if(!Array.isArray(s.debts)||!s.debts.length){
+  const oldTotal=Number(s.visa.original||0)+Number(s.visa.addedDebt||0), oldPaid=Number(s.visa.paid||0);
+  s.debts=[{id:'visa',name:'بطاقة الفيزا',original:oldTotal,addedDebt:0,paid:oldPaid,log:s.visa.log.map(x=>({...x,debtId:'visa'}))}];
+}
+s.debts=s.debts.map(d=>({...d,original:Number(d.original||0),addedDebt:Number(d.addedDebt||0),paid:Number(d.paid||0),log:Array.isArray(d.log)?d.log:[]}));s.fund=s.fund||{balance:0,log:[]};s.fund.log=Array.isArray(s.fund.log)?s.fund.log:[];s.trips=Array.isArray(s.trips)?s.trips:[];s.tripExpenseCategories=Array.isArray(s.tripExpenseCategories)&&s.tripExpenseCategories.length?s.tripExpenseCategories:['تذاكر','سكن','مواصلات','مطاعم','أنشطة','مشتريات','أخرى'];return s}
+let state=load();
+function monthSnapshot(){return{salary:Number(state.salary||0),incomes:clone(state.incomes),items:clone(state.items),accountStatus:Object.fromEntries(state.accounts.map(a=>[a.id,!!a.transferred]))}}
+function storeActiveMonth(){if(state.month)state.months[state.month]=monthSnapshot()}
+function loadMonthData(month){const x=state.months[month];if(!x)return false;state.month=month;state.salary=Number(x.salary||0);state.incomes=clone(x.incomes||[]);state.items=clone(x.items||[]);const flags=x.accountStatus||{};state.accounts=state.accounts.map(a=>({...a,transferred:!!flags[a.id]}));return true}
+function saveRaw(x){localStorage.setItem(KEY,JSON.stringify(x))}function save(){storeActiveMonth();saveRaw(state);render()}function fmt(n){return Number(n||0).toLocaleString('en-US',{maximumFractionDigits:2})}function esc(s=''){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}function toast(t){const e=document.getElementById('toast');e.textContent=t;e.style.display='block';clearTimeout(window.__tt);window.__tt=setTimeout(()=>e.style.display='none',2200)}
+
+const mainOrder=['budget'];let currentPage='budget';const currentSub={budget:'summary',visa:'summary',obligations:'summary',trips:'list'};
+function showPage(p){currentPage=p;document.querySelectorAll('.page').forEach(x=>x.classList.toggle('active',x.dataset.page===p));document.querySelectorAll('#mainTabs button').forEach(b=>b.classList.toggle('active',b.dataset.page===p));showSub(p,currentSub[p],false);window.scrollTo({top:0,behavior:'smooth'})}
+function showSub(group,sub,scroll=true){currentSub[group]=sub;document.querySelectorAll(`.subtabs[data-group="${group}"] button`).forEach(b=>b.classList.toggle('active',b.dataset.sub===sub));document.querySelectorAll(`#page-${group} .subpage`).forEach(x=>x.classList.toggle('active',x.dataset.subpage===sub));if(scroll)window.scrollTo({top:0,behavior:'smooth'})}
+document.querySelectorAll('#mainTabs button').forEach(b=>b.onclick=()=>showPage(b.dataset.page));document.querySelectorAll('.subtabs button').forEach(b=>b.onclick=()=>showSub(b.closest('.subtabs').dataset.group,b.dataset.sub));
+let tx=0,ty=0;document.getElementById('swipeRoot').addEventListener('touchstart',e=>{if(e.touches.length===1){tx=e.touches[0].clientX;ty=e.touches[0].clientY}},{passive:true});document.getElementById('swipeRoot').addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-tx,dy=e.changedTouches[0].clientY-ty;if(Math.abs(dx)<65||Math.abs(dx)<Math.abs(dy)*1.2)return;const subBtns=[...document.querySelectorAll(`.subtabs[data-group="${currentPage}"] button`)];const si=subBtns.findIndex(b=>b.dataset.sub===currentSub[currentPage]);if(Math.abs(dx)>130&&subBtns.length>1){const ni=dx<0?si+1:si-1;if(ni>=0&&ni<subBtns.length){showSub(currentPage,subBtns[ni].dataset.sub);return}}const i=mainOrder.indexOf(currentPage),ni=dx<0?i+1:i-1;if(ni>=0&&ni<mainOrder.length)showPage(mainOrder[ni])},{passive:true});
+
+function totals(){const planned=state.items.reduce((s,x)=>s+Number(x.amount||0),0),paid=state.items.filter(x=>x.paid).reduce((s,x)=>s+Number(x.amount||0),0),extra=state.incomes.reduce((s,x)=>s+Number(x.amount||0),0),income=Number(state.salary||0)+extra;return{planned,paid,extra,income,remaining:income-planned}}
+function shiftDueToMonth(due,targetMonth){if(!due)return'';return `${targetMonth}-${due.slice(8,10)||'01'}`}
+function saveBudgetHeader(){const chosen=budgetMonth.value;if(!chosen)return toast('اختر الشهر أولًا');if(state.month&&chosen!==state.month){budgetMonth.value=state.month;return toast('استخدم زر إنشاء الشهر القادم أو قائمة الأشهر')}if(!state.month)state.month=chosen;state.salary=Number(salary.value||0);save();toast('تم حفظ الميزانية')}
+function switchMonth(month){if(!month||month===state.month)return;storeActiveMonth();if(loadMonthData(month)){saveRaw(state);render();toast('تم فتح الشهر المحفوظ')}}
+function cloneNextMonth(){
+  if(!state.month)return toast('اختر الشهر أولًا');
+  storeActiveMonth();
+  const [y,m]=state.month.split('-').map(Number),d=new Date(y,m,1),next=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  if(state.months[next]){loadMonthData(next);saveRaw(state);render();return toast('تم فتح الشهر الموجود مسبقًا')}
+  const annualSources=Object.values(state.months).flatMap(x=>x.items||[]).filter(x=>x.repeat==='annual'&&x.due&&x.due.slice(5,7)===next.slice(5,7));
+  const monthly=state.items.filter(x=>x.repeat==='monthly'),seen=new Set();
+  state.month=next;state.incomes=[];state.items=[...monthly,...annualSources].filter(x=>{const k=[x.repeat,x.name,x.accountId,x.category,x.due?x.due.slice(5):''].join('|');if(seen.has(k))return false;seen.add(k);return true}).map(x=>({...clone(x),id:'i'+Date.now()+Math.random().toString(36).slice(2,7),paid:false,due:shiftDueToMonth(x.due,next)}));state.accounts=state.accounts.map(a=>({...a,transferred:false}));state.months[next]=monthSnapshot();saveRaw(state);render();toast('تم إنشاء الشهر القادم وحفظ الشهر السابق')
+}
+function addIncome(){const n=incomeName.value.trim(),a=Number(incomeAmount.value||0);if(!n||a<=0)return;state.incomes.push({id:'inc'+Date.now(),name:n,amount:a});incomeName.value='';incomeAmount.value='';save()}
+function deleteIncome(id){state.incomes=state.incomes.filter(x=>x.id!==id);save()}
+function resetItemForm(){editItemId.value='';itemName.value='';itemAmount.value='';itemDue.value='';itemNotes.value='';itemRepeat.value='monthly'}
+function saveItem(){const name=itemName.value.trim(),amount=Number(itemAmount.value||0);if(!name||amount<=0)return toast('أدخل اسم البند والمبلغ');const obj={id:editItemId.value||'i'+Date.now(),name,amount,accountId:itemAccount.value,category:itemCategory.value,repeat:itemRepeat.value,due:itemDue.value,notes:itemNotes.value.trim(),paid:false};const i=state.items.findIndex(x=>x.id===obj.id);if(i>=0)obj.paid=state.items[i].paid,state.items[i]=obj;else state.items.push(obj);resetItemForm();save()}
+function editItem(id){const x=state.items.find(x=>x.id===id);if(!x)return;editItemId.value=x.id;itemName.value=x.name;itemAmount.value=x.amount;itemAccount.value=x.accountId;itemCategory.value=x.category;itemRepeat.value=x.repeat;itemDue.value=x.due||'';itemNotes.value=x.notes||'';showSub('budget','items')}
+function togglePaid(id){const x=state.items.find(x=>x.id===id);if(!x)return;const next=!x.paid;financeSyncBudgetPayment(x,next);x.paid=next;save()}
+function deleteItem(id){if(confirm('حذف البند؟')){state.items=state.items.filter(x=>x.id!==id);save()}}
+function addAccount(){const n=accountName.value.trim();if(!n)return;state.accounts.push({id:'a'+Date.now(),name:n,balance:Number(accountBalance.value||0),transferred:false});accountName.value='';accountBalance.value='';save()}
+function toggleTransferred(id){const a=state.accounts.find(x=>x.id===id);if(a){a.transferred=!a.transferred;save();toast(a.transferred?'تم التحويل':'تم إلغاء علامة التحويل')}}
+function deleteAccount(id){if(state.items.some(x=>x.accountId===id))return toast('لا يمكن حذف حساب مرتبط ببنود');if(confirm('حذف الحساب؟')){state.accounts=state.accounts.filter(x=>x.id!==id);save()}}
+function addCategory(){const n=newCategory.value.trim();if(!n)return;if(!state.categories.includes(n))state.categories.push(n);newCategory.value='';save()}
+function deleteCategory(n){if(defaultCategories.includes(n))return toast('هذا تصنيف أساسي');if(state.items.some(x=>x.category===n))return toast('التصنيف مستخدم في بنود');state.categories=state.categories.filter(x=>x!==n);save()}
+
+function debtTotal(d){return Number(d.original||0)+Number(d.addedDebt||0)}
+function debtRemain(d){return Math.max(0,debtTotal(d)-Number(d.paid||0))}
+function calcTotalDebt(){return state.debts.reduce((s,d)=>s+debtTotal(d),0)}
+function visaRemain(){return state.debts.reduce((s,d)=>s+debtRemain(d),0)}
+function totalDebtPaid(){return state.debts.reduce((s,d)=>s+Number(d.paid||0),0)}
+function allDebtLogs(){return state.debts.flatMap(d=>(d.log||[]).map(x=>({...x,debtName:d.name}))).sort((a,b)=>new Date(b.date)-new Date(a.date))}
+function addDebtAccount(){
+  const name=newDebtName.value.trim(),amount=Number(newDebtAmount.value||0);
+  if(!name||amount<=0)return toast('أدخل اسم الدين وقيمته');
+  state.debts.push({id:'d'+Date.now(),name,original:amount,addedDebt:0,paid:0,log:[{id:'dl'+Date.now(),date:new Date().toISOString(),type:'debt',amount,text:'الرصيد الافتتاحي للدين',source:'manual'}]});
+  newDebtName.value='';newDebtAmount.value='';save();toast('تمت إضافة الدين');
+}
+function deleteDebtAccount(id){
+  if(id==='visa')return toast('بطاقة الفيزا الأساسية لا تحذف');
+  const d=state.debts.find(x=>x.id===id);if(!d)return;
+  if(!confirm('حذف الدين "'+d.name+'" وسجله؟'))return;
+  state.debts=state.debts.filter(x=>x.id!==id);save();
+}
+function addVisaTxn(type,amount,text,source='manual',debtId='visa'){
+  amount=Number(amount||0);if(amount<=0)return;
+  const d=state.debts.find(x=>x.id===debtId)||state.debts[0];if(!d)return;
+  if(type==='debt')d.addedDebt=Number(d.addedDebt||0)+amount;else d.paid=Number(d.paid||0)+amount;
+  d.log.unshift({id:'v'+Date.now(),date:new Date().toISOString(),type,amount,text:text||(type==='debt'?'إضافة دين':'سداد'),source,debtId:d.id});
+  save();
+}
+function visaManualAdd(){const a=Number(visaManualAmount.value||0);if(a<=0)return toast('أدخل مبلغًا صحيحًا');addVisaTxn(visaManualType.value,a,'إدخال مباشر','manual',visaManualDebt.value);visaManualAmount.value='';toast('تم حفظ العملية')}
+function resetAllDebts(){if(!confirm('تصفير جميع الديون والسداد والسجل؟'))return;state.debts=state.debts.map(d=>({...d,original:0,addedDebt:0,paid:0,log:[]}));save();toast('تم تصفير الديون')}
+function resetFund(){if(!confirm('تصفير رصيد الالتزامات والسجل؟'))return;state.fund.balance=0;state.fund.log=[];save();toast('تم تصفير الالتزامات')}
+function fundTotals(){let added=0,spent=0;state.fund.log.forEach(x=>x.type==='add'?added+=Number(x.amount||0):spent+=Number(x.amount||0));return{added,spent}}
+function addFundTxn(type,amount,text,source='manual'){amount=Number(amount||0);if(amount<=0)return;state.fund.balance=Number(state.fund.balance||0)+(type==='add'?amount:-amount);state.fund.log.unshift({id:'f'+Date.now(),date:new Date().toISOString(),type,amount,text:text||(type==='add'?'إضافة':'سحب'),source});save()}
+function fundManualAdd(){const a=Number(fundManualAmount.value||0);if(a<=0)return toast('أدخل مبلغًا صحيحًا');addFundTxn(fundManualType.value,a,'إدخال مباشر');fundManualAmount.value='';toast('تم حفظ العملية')}
+function normalizeDigits(s){const ar='٠١٢٣٤٥٦٧٨٩',fa='۰۱۲۳۴۵۶۷۸۹';return String(s).replace(/[٠-٩]/g,d=>ar.indexOf(d)).replace(/[۰-۹]/g,d=>fa.indexOf(d))}
+function extractAmount(msg){const s=normalizeDigits(msg).replace(/,/g,'');const pats=[/(?:SAR|ر\.س|ريال|﷼)\s*([0-9]+(?:\.[0-9]+)?)/i,/([0-9]+(?:\.[0-9]+)?)\s*(?:SAR|ر\.س|ريال|﷼)/i,/(?:amount|مبلغ|بقيمة|بمبلغ)\s*[:\-]?\s*([0-9]+(?:\.[0-9]+)?)/i];for(const p of pats){const m=s.match(p);if(m)return Number(m[1])}const nums=[...s.matchAll(/\b([0-9]+(?:\.[0-9]+)?)\b/g)].map(m=>Number(m[1])).filter(n=>n>0&&n<1000000);return nums.length?nums[0]:0}
+function classifyVisa(msg){const s=msg.toLowerCase();const payment=['سداد','دفعة','payment','paid','تسديد','إيداع','credit card payment'];const debt=['شراء','مشتريات','purchase','عملية شراء','خصم','سحب','online purchase','pos','مدى'];if(payment.some(k=>s.includes(k)))return'payment';if(debt.some(k=>s.includes(k)))return'debt';return'unknown'}
+function classifyFund(msg){const s=msg.toLowerCase();const add=['حوالة واردة','إيداع','ايداع','تم إضافة','تم اضافة','credited','deposit','incoming','استلام'];const out=['شراء','خصم','سحب','حوالة صادرة','تحويل','purchase','withdraw','debit','pos'];if(add.some(k=>s.includes(k)))return'add';if(out.some(k=>s.includes(k)))return'withdraw';return'unknown'}
+function showDebtEntryMode(mode){
+  const direct=mode==='direct';
+  debtDirectPanel.classList.toggle('hidden',!direct);
+  debtSmsPanel.classList.toggle('hidden',direct);
+  debtDirectBtn.className=direct?'primary':'secondary';
+  debtSmsBtn.className=direct?'secondary':'primary';
+}
+function showFundEntryMode(mode){
+  const direct=mode==='direct';
+  fundDirectPanel.classList.toggle('hidden',!direct);
+  fundSmsPanel.classList.toggle('hidden',direct);
+  fundDirectBtn.className=direct?'primary':'secondary';
+  fundSmsBtn.className=direct?'secondary':'primary';
+}
+let pendingVisa=null,pendingFund=null;
+function analyzeVisaSms(){const msg=visaSms.value.trim(),amount=extractAmount(msg),selected=visaSmsType.value,type=selected==='auto'?classifyVisa(msg):selected;pendingVisa={msg,amount,type,debtId:visaSmsDebt.value};visaPreview.innerHTML=`<div class="preview ${amount&&type!=='unknown'?'good':'bad'}"><strong>المبلغ: ${fmt(amount)} ريال</strong><br><span>التصنيف: ${type==='debt'?'إضافة دين':type==='payment'?'سداد':'غير واضح'}</span>${type==='unknown'?`<div style="margin-top:8px"><select id="visaPreviewType"><option value="debt">إضافة دين</option><option value="payment">سداد</option></select></div>`:''}<div class="actions"><button class="success" onclick="confirmVisaSms()">تأكيد وإضافة</button></div></div>`}
+function confirmVisaSms(){if(!pendingVisa||pendingVisa.amount<=0)return toast('لم أتعرف على مبلغ صحيح');const type=pendingVisa.type==='unknown'?document.getElementById('visaPreviewType').value:pendingVisa.type;addVisaTxn(type,pendingVisa.amount,pendingVisa.msg,'sms',pendingVisa.debtId);visaSms.value='';visaPreview.innerHTML='';pendingVisa=null;toast('تمت إضافة العملية')}
+function analyzeFundSms(){const msg=fundSms.value.trim(),amount=extractAmount(msg),selected=fundSmsType.value,type=selected==='auto'?classifyFund(msg):selected;pendingFund={msg,amount,type};fundPreview.innerHTML=`<div class="preview ${amount&&type!=='unknown'?'good':'bad'}"><strong>المبلغ: ${fmt(amount)} ريال</strong><br><span>التصنيف: ${type==='add'?'إضافة للصندوق':type==='withdraw'?'سحب من الصندوق':'غير واضح'}</span>${type==='unknown'?`<div style="margin-top:8px"><select id="fundPreviewType"><option value="add">إضافة</option><option value="withdraw">سحب</option></select></div>`:''}<div class="actions"><button class="success" onclick="confirmFundSms()">تأكيد وإضافة</button></div></div>`}
+function confirmFundSms(){if(!pendingFund||pendingFund.amount<=0)return toast('لم أتعرف على مبلغ صحيح');const type=pendingFund.type==='unknown'?document.getElementById('fundPreviewType').value:pendingFund.type;addFundTxn(type,pendingFund.amount,pendingFund.msg,'sms');fundSms.value='';fundPreview.innerHTML='';pendingFund=null;toast('تمت إضافة العملية')}
+
+function addTrip(){const n=tripName.value.trim(),b=Number(tripBudget.value||0);if(!n)return toast('أدخل اسم الرحلة');const id='t'+Date.now();state.trips.push({id,name:n,date:tripDate.value,budget:b,notes:tripNotes.value.trim(),expenses:[]});state.selectedTripId=id;tripName.value='';tripDate.value='';tripBudget.value='';tripNotes.value='';save();showSub('trips','details')}
+function selectTrip(id){state.selectedTripId=id;saveRaw(state);renderTrips();showSub('trips','details')}
+function deleteTrip(id){if(confirm('حذف الرحلة ومصاريفها؟')){state.trips=state.trips.filter(x=>x.id!==id);if(state.selectedTripId===id)state.selectedTripId=null;save()}}
+function addTripExpense(){const t=state.trips.find(x=>x.id===state.selectedTripId);if(!t)return;const category=tripExpenseCategory.value,a=Number(tripExpenseAmount.value||0);if(!category||a<=0)return toast('اختر البند وأدخل المبلغ');t.expenses.push({id:'e'+Date.now(),name:category,amount:a,category,date:new Date().toISOString()});tripExpenseAmount.value='';save()}
+function addTripExpenseCategory(){const n=newTripExpenseCategory.value.trim();if(!n)return;if(!state.tripExpenseCategories.includes(n))state.tripExpenseCategories.push(n);newTripExpenseCategory.value='';save()}
+function deleteTripExpenseCategory(n){if(['تذاكر','سكن','مواصلات','مطاعم','أنشطة','مشتريات','أخرى'].includes(n))return toast('هذا بند أساسي');if(state.trips.some(t=>(t.expenses||[]).some(e=>e.category===n)))return toast('البند مستخدم في مصروف سابق');state.tripExpenseCategories=state.tripExpenseCategories.filter(x=>x!==n);save()}
+function deleteTripExpense(id){const t=state.trips.find(x=>x.id===state.selectedTripId);if(!t)return;t.expenses=t.expenses.filter(x=>x.id!==id);save()}
+
+
+function exportBackup(){
+  try{
+    saveRaw(state);
+    const payload={
+      app:'Budget_Debts_Obligations_Trips_V4_Clean',
+      version:2,
+      exportedAt:new Date().toISOString(),
+      data:state
+    };
+    const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+    const a=document.createElement('a');
+    const stamp=new Date().toISOString().slice(0,10);
+    a.href=URL.createObjectURL(blob);
+    a.download='Budget_Backup_'+stamp+'.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+    backupInfo.textContent='✓ تم إنشاء ملف النسخة الاحتياطية. احتفظ به في مكان آمن.';
+    toast('تم تصدير النسخة الاحتياطية');
+  }catch(e){
+    toast('تعذر إنشاء النسخة الاحتياطية');
+  }
+}
+
+function restoreBackupFile(file){
+  if(!file)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const payload=JSON.parse(r.result);
+      const incoming=payload&&payload.data?payload.data:payload;
+      if(!incoming || typeof incoming!=='object' || Array.isArray(incoming))throw new Error();
+      if(!confirm('استعادة هذه النسخة ستستبدل جميع البيانات الموجودة حاليًا في البرنامج. هل تريد المتابعة؟'))return;
+      state=normalize(clone(incoming));
+      saveRaw(state);
+      render();
+      backupInfo.textContent='✓ تمت استعادة البيانات بنجاح.';
+      toast('تمت استعادة النسخة الاحتياطية');
+    }catch(e){
+      alert('ملف النسخة الاحتياطية غير صالح.');
+    }finally{
+      restoreBackupInput.value='';
+    }
+  };
+  r.readAsText(file);
+}
+
+function renderBudget(){budgetMonth.value=state.month||'';salary.value=state.salary||'';const t=totals();stIncome.textContent=fmt(t.income);stPlanned.textContent=fmt(t.planned);stPaid.textContent=fmt(t.paid);stRemain.textContent=fmt(t.remaining);const pct=t.planned?Math.min(100,t.paid/t.planned*100):0;budgetProgress.style.width=pct+'%';budgetProgressText.textContent=`تم سداد ${pct.toFixed(0)}% من البنود المخططة`;incomeList.innerHTML=state.incomes.length?state.incomes.map(x=>`<div class="row"><div class="row-head"><strong>${esc(x.name)}</strong><span class="amount">${fmt(x.amount)} ريال</span></div><div class="actions"><button class="danger" onclick="deleteIncome('${x.id}')">حذف</button></div></div>`).join(''):'<div class="empty">لا يوجد دخل إضافي</div>';const by={};state.items.forEach(x=>by[x.category]=(by[x.category]||0)+Number(x.amount||0));categorySummary.innerHTML=Object.keys(by).length?Object.entries(by).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="row"><div class="row-head"><strong>${esc(k)}</strong><span>${fmt(v)} ريال</span></div></div>`).join(''):'<div class="empty">لا توجد بنود</div>';itemAccount.innerHTML=state.accounts.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');itemCategory.innerHTML=state.categories.map(c=>`<option>${esc(c)}</option>`).join('');itemsList.innerHTML=state.items.length?state.items.map(x=>{const a=state.accounts.find(a=>a.id===x.accountId);return`<div class="row ${x.paid?'paid':''}"><div class="row-head"><div><strong>${esc(x.name)}</strong><div class="small">${esc(x.category)} • ${esc(a?.name||'بدون حساب')} ${x.due?'• '+x.due:''}</div></div><span class="amount">${fmt(x.amount)} ريال</span></div><div class="actions"><button class="${x.paid?'success':'secondary'}" onclick="togglePaid('${x.id}')">${x.paid?'✓ تم السداد':'تم السداد'}</button><button class="secondary" onclick="editItem('${x.id}')">تعديل</button><button class="danger" onclick="deleteItem('${x.id}')">حذف</button></div></div>`}).join(''):'<div class="empty">لا توجد بنود</div>';accountsList.innerHTML=state.accounts.map(a=>{const sum=state.items.filter(x=>x.accountId===a.id).reduce((s,x)=>s+Number(x.amount||0),0);return`<div class="account-card ${a.transferred?'transferred':''}"><div class="row-head"><div><strong>${esc(a.name)}</strong><div class="small">الرصيد: ${fmt(a.balance)} ريال • بنود الشهر: ${fmt(sum)} ريال</div></div><button class="danger" onclick="deleteAccount('${a.id}')">حذف</button></div><button class="transfer-btn" onclick="toggleTransferred('${a.id}')">${a.transferred?'✓ تم التحويل':'تم التحويل'}</button></div>`}).join('');categoriesList.innerHTML=state.categories.map(c=>`<span class="tag">${esc(c)} ${defaultCategories.includes(c)?'':`<button style="padding:0 4px;background:none;color:#b42318" onclick="deleteCategory('${c.replace(/'/g,"\\'")}')">×</button>`}</span>`).join('')}
+function renderVisa(){
+  const logs=allDebtLogs();
+  document.getElementById('visaDebt').textContent=fmt(calcTotalDebt());visaPaid.textContent=fmt(totalDebtPaid());visaRemaining.textContent=fmt(visaRemain());visaTxnCount.textContent=logs.length;
+  const opts=state.debts.map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join('');
+  visaManualDebt.innerHTML=opts;visaSmsDebt.innerHTML=opts;
+  debtsList.innerHTML=state.debts.length?state.debts.map(d=>`<div class="account-card"><div class="row-head"><div><strong>${esc(d.name)}</strong><div class="small">إجمالي الدين: ${fmt(debtTotal(d))} ريال • السداد: ${fmt(d.paid)} ريال</div></div><span class="amount">${fmt(debtRemain(d))} ريال متبقي</span></div>${d.id==='visa'?'':`<div class="actions"><button class="danger" onclick="deleteDebtAccount('${d.id}')">حذف الدين</button></div>`}</div>`).join(''):'<div class="empty">لا توجد ديون</div>';
+  visaLog.innerHTML=logs.length?logs.map(x=>`<div class="row"><div class="row-head"><div><strong>${esc(x.debtName)}</strong><div class="${x.type==='payment'?'log-pos':'log-neg'}">${x.type==='payment'?'سداد':'دين'} • ${fmt(x.amount)} ريال</div></div><span class="small">${new Date(x.date).toLocaleDateString('ar-SA')}</span></div><div class="small">${esc(x.text||'')}</div></div>`).join(''):'<div class="empty">لا توجد عمليات</div>';
+}
+function renderFund(){const t=fundTotals();fundBalance.textContent=fmt(state.fund.balance);fundAdded.textContent=fmt(t.added);fundSpent.textContent=fmt(t.spent);fundTxnCount.textContent=state.fund.log.length;fundLog.innerHTML=state.fund.log.length?state.fund.log.map(x=>`<div class="row"><div class="row-head"><strong class="${x.type==='add'?'log-pos':'log-neg'}">${x.type==='add'?'إضافة':'سحب'} • ${fmt(x.amount)} ريال</strong><span class="small">${new Date(x.date).toLocaleDateString('ar-SA')}</span></div><div class="small">${esc(x.text||'')}</div></div>`).join(''):'<div class="empty">لا توجد عمليات</div>'}
+function renderTrips(){tripExpenseCategory.innerHTML=state.tripExpenseCategories.map(c=>`<option>${esc(c)}</option>`).join('');tripExpenseCategoriesList.innerHTML=state.tripExpenseCategories.map(c=>`<span class="tag">${esc(c)} ${['تذاكر','سكن','مواصلات','مطاعم','أنشطة','مشتريات','أخرى'].includes(c)?'':`<button style="padding:0 4px;background:none;color:#b42318" onclick="deleteTripExpenseCategory('${c.replace(/'/g,"\\'")}')">×</button>`}</span>`).join('');tripsList.innerHTML=state.trips.length?state.trips.map(t=>{const spent=(t.expenses||[]).reduce((s,x)=>s+Number(x.amount||0),0);return`<div class="trip-card ${state.selectedTripId===t.id?'selected':''}"><div class="row-head"><div><strong>${esc(t.name)}</strong><div class="small">${t.date||'بدون تاريخ'} • الميزانية ${fmt(t.budget)} ريال • المصروف ${fmt(spent)} ريال</div></div></div><div class="actions"><button class="primary" onclick="selectTrip('${t.id}')">فتح الرحلة</button><button class="danger" onclick="deleteTrip('${t.id}')">حذف</button></div></div>`}).join(''):'<div class="card empty">لا توجد رحلات بعد</div>';const t=state.trips.find(x=>x.id===state.selectedTripId);tripDetailsEmpty.style.display=t?'none':'block';tripDetails.classList.toggle('hidden',!t);if(t){const spent=(t.expenses||[]).reduce((s,x)=>s+Number(x.amount||0),0);tripDetailsTitle.textContent=t.name;tripBudgetStat.textContent=fmt(t.budget);tripSpentStat.textContent=fmt(spent);tripRemainStat.textContent=fmt(Number(t.budget||0)-spent);tripExpenseCount.textContent=(t.expenses||[]).length;tripMeta.textContent=`${t.date||'بدون تاريخ'}${t.notes?' • '+t.notes:''}`;tripExpenses.innerHTML=(t.expenses||[]).length?t.expenses.map(x=>`<div class="row"><div class="row-head"><div><strong>${esc(x.name)}</strong><div class="small">${esc(x.category)}</div></div><span class="amount">${fmt(x.amount)} ريال</span></div><div class="actions"><button class="danger" onclick="deleteTripExpense('${x.id}')">حذف</button></div></div>`).join(''):'<div class="empty">لا توجد مصاريف</div>'}}
+function renderSavedMonths(){const months=[...new Set([...Object.keys(state.months||{}),...(state.month?[state.month]:[])])].sort().reverse();savedMonths.innerHTML=months.length?months.map(m=>`<option value="${m}" ${m===state.month?'selected':''}>${m}</option>`).join(''):'<option value="">لا توجد أشهر محفوظة</option>'}
+function render(){renderSavedMonths();renderBudget();renderVisa();renderFund();renderTrips()}
+render();
+document.getElementById('restoreBackupInput').addEventListener('change',e=>restoreBackupFile(e.target.files[0]));
+showDebtEntryMode('direct');showFundEntryMode('direct');
+</script>
+
+<script id="financeBudgetIntegration">
+const BANK_KEY='bank_manager_v11_seeded_exact', LINK_KEY='finance_budget_links_v1';
+const DEFAULT_LINKS={a1:'d3604078',a2:'',a3:'inma2000',a4:'',a5:'ahli0110',a6:''};
+function loadBankForBudget(){try{return JSON.parse(localStorage.getItem(BANK_KEY)||'null')}catch(e){return null}}
+function loadLinks(){try{return Object.assign({},DEFAULT_LINKS,JSON.parse(localStorage.getItem(LINK_KEY)||'{}'))}catch(e){return Object.assign({},DEFAULT_LINKS)}}
+function saveLink(id,val){const x=loadLinks();x[id]=val;localStorage.setItem(LINK_KEY,JSON.stringify(x));renderBudgetLinks()}
+function ensureFinance(b){b.finance=b.finance||{debts:[],fund:{balance:0,log:[]}};b.finance.debts=Array.isArray(b.finance.debts)?b.finance.debts:[];b.finance.fund=b.finance.fund||{balance:0,log:[]};b.finance.fund.log=Array.isArray(b.finance.fund.log)?b.finance.fund.log:[];b.history=Array.isArray(b.history)?b.history:[];return b}
+function financeSyncBudgetPayment(item,paid){
+  let b=loadBankForBudget();if(!b)return;ensureFinance(b);const links=loadLinks(),aid=links[item.accountId]||'',linkId=`budget:${state.month||'month'}:${item.id}`;
+  const existing=(b.history||[]).find(h=>h.linkId===linkId);
+  if(paid){
+    if(aid && !existing){const a=b.accounts.find(x=>x.id===aid);if(a){a.balance=Math.round((Number(a.balance||0)-Number(item.amount||0))*100)/100;b.history.unshift({ts:Date.now(),type:'سداد ميزانية — '+item.name,accountId:a.id,delta:-Number(item.amount||0),raw:'من الميزانية الشهرية '+(state.month||''),source:'budget',linkId})}}
+    if(/التزامات/.test(item.name||'')&&!b.finance.fund.log.some(x=>x.linkId===linkId)){const amount=Number(item.amount||0);b.finance.fund.balance=Math.round((Number(b.finance.fund.balance||0)+amount)*100)/100;b.finance.fund.log.unshift({id:'fb'+Date.now(),date:new Date().toISOString(),type:'add',amount,text:'تحويل من بند الميزانية: '+item.name,source:'budget',linkId})}
+  }else{
+    if(existing){const a=b.accounts.find(x=>x.id===existing.accountId);if(a)a.balance=Math.round((Number(a.balance||0)-Number(existing.delta||0))*100)/100;b.history=b.history.filter(h=>h!==existing)}
+    const fl=b.finance.fund.log.find(x=>x.linkId===linkId);if(fl){b.finance.fund.balance=Math.round((Number(b.finance.fund.balance||0)-Number(fl.amount||0))*100)/100;b.finance.fund.log=b.finance.fund.log.filter(x=>x!==fl)}
+  }
+  localStorage.setItem(BANK_KEY,JSON.stringify(b));
+}
+function renderBudgetLinks(){
+  const host=document.getElementById('budget-accounts');if(!host)return;let box=document.getElementById('financeBankLinks');if(!box){box=document.createElement('div');box.id='financeBankLinks';box.className='finance-link-card';host.appendChild(box)}
+  const b=loadBankForBudget(),links=loadLinks(),opts=(b&&b.accounts||[]).map(a=>`<option value="${a.id}">${esc(a.bank)} — ${esc(a.name)} ••••${esc(a.last4)}</option>`).join('');
+  box.innerHTML='<h2>ربط حسابات الميزانية بمدير الحسابات</h2><div class="sync-note">عند تعليم بند بأنه «تم السداد»، يُسجل السداد تلقائيًا في الحساب البنكي المرتبط ويُحدّث رصيده. يمكنك تغيير الربط في أي وقت.</div>'+state.accounts.map(a=>`<div class="finance-link-row"><b>${esc(a.name)}</b><select onchange="saveLink('${a.id}',this.value)"><option value="">غير مربوط</option>${opts}</select></div>`).join('');
+  [...box.querySelectorAll('select')].forEach((s,i)=>s.value=links[state.accounts[i].id]||'');
+}
+const _budgetRender=render;render=function(){_budgetRender();renderBudgetLinks()};
+window.addEventListener('message',e=>{if(e.data==='finance-refresh'){state=load();render()}});
+render();
+</script>
+
+<style id="financeBudgetV2Styles">
+.bank-live{border:1px solid #cbdde9;background:#eff8ff;border-radius:12px;padding:9px;margin-top:7px;font-size:12px;color:#21486c;line-height:1.7}
+.fbi-row{display:grid;grid-template-columns:1fr 1fr;gap:7px;align-items:center;border-bottom:1px solid #e7eef5;padding:9px 0}.fbi-row label{margin:0}.fbi-row select{padding:8px}.tiny{font-size:11px;color:#657286}
+@media(max-width:480px){.fbi-row{grid-template-columns:1fr}}
+</style>
+<script id="financeBudgetV2">
+(function(){
+ const PER_ITEM_KEY='finance_budget_item_links_v2';
+ const round2=n=>Math.round(Number(n||0)*100)/100;
+ const escB=x=>esc(x==null?'':String(x));
+ function loadItemLinks(){try{return JSON.parse(localStorage.getItem(PER_ITEM_KEY)||'{}')}catch(e){return {}}}
+ function storeItemLink(itemId,key,value){const links=loadItemLinks();links[itemId]={...(links[itemId]||{}),[key]:value};localStorage.setItem(PER_ITEM_KEY,JSON.stringify(links));render()}
+ window.storeItemLink=storeItemLink;
+ const oldSaveLink=saveLink;
+ saveLink=function(id,val){oldSaveLink(id,val);render()};
+ function matchedBankId(item){return loadItemLinks()[item.id]?.bankAccountId || loadLinks()[item.accountId]||''}
+ function isObligation(item){return /^\s*الالتزامات\s*$/.test(item.name||'')}
+ function isVisaItem(item){return /(فيزا|visa)/i.test(item.name||'')}
+ function removeHistoricalFundLink(b,linkId){
+   const f=b.finance?.fund;if(!f)return;
+   const records=(f.log||[]).filter(x=>x.linkId===linkId);
+   if(records.length){
+    b.finance.fundArchive=b.finance.fundArchive||JSON.parse(JSON.stringify(f));
+    f.log=f.log.filter(x=>x.linkId!==linkId);
+    f.balance=round2(Number(f.balance||0)-records.reduce((n,x)=>n+Number(x.amount||0)*(x.type==='add'?1:-1),0));
+   }
+ }
+ function reconcileSimilar(b,aid,amount,item,month){
+  const today=Date.now();
+  const near=(b.history||[]).filter(h=>h.accountId===aid && h.source!=='budget' && Number(h.delta)<0 &&Math.abs(Math.abs(Number(h.delta))-amount)<0.005 && Math.abs(today-Number(h.ts||0))<14*86400000);
+  return near.length && !confirm('توجد '+near.length+' عملية بنكية بنفس المبلغ ('+amount+' ريال) في آخر ١٤ يومًا.\n\nموافق = خصم جديد.\nإلغاء = تم تسجيل الدفع البنكي مسبقًا (لا تخصم مرة أخرى).');
+ }
+ // ضمان أن الدفع في الميزانية وسجل البنك يظلّان حركة واحدة قابلة للعكس.
+ financeSyncBudgetPayment=function(item,paid){
+  const b=loadBankForBudget();if(!b)return false;ensureFinance(b);
+  const month=state.month||'month',linkId='budget:'+month+':'+item.id;
+  const bankId=matchedBankId(item);
+  const same=(b.history||[]).filter(x=>x.linkId===linkId);
+  if(!paid){
+   for(const x of same){const a=b.accounts.find(z=>z.id===x.accountId);if(a)a.balance=round2(a.balance-Number(x.delta||0))}
+   b.history=b.history.filter(x=>x.linkId!==linkId);
+   // لا نحذف السجل القديم من قبل الترقية؛ نؤرشفه عند إلغاء الدفع المكرر.
+   removeHistoricalFundLink(b,linkId);
+   const cl=(b.finance.debts||[]).flatMap(d=>(d.log||[]).filter(x=>x.linkId===linkId).map(x=>({d,x})));
+   for(const {d,x} of cl){d.paid=round2(Number(d.paid||0)-Number(x.amount||0));d.log=d.log.filter(z=>z!==x)}
+   localStorage.setItem(BANK_KEY,JSON.stringify(b));return true;
+  }
+  if(same.length)return true;
+  if(!bankId){alert('اربط بند «'+item.name+'» بحساب بنكي في صفحة الحسابات أولًا.');return false}
+  const source=b.accounts.find(x=>x.id===bankId && x.kind!=='credit');if(!source){alert('اختر حسابًا بنكيًا نقديًا للسداد. الفيزا حساب ائتماني وتُحدَّث برسائل البنك فقط.');return false}
+  const amount=Number(item.amount||0);if(!(amount>0))return false;
+  let skip=false;
+  if(!isObligation(item))skip=!!reconcileSimilar(b,bankId,amount,item,month);
+  if(isObligation(item)){
+   const target=b.accounts.find(x=>x.id==='amuju7ih2gtiyr');
+   if(!target){alert('حساب D360 الالتزام ••••5657 غير موجود.');return false}
+   if(source.id!==target.id){
+    source.balance=round2(Number(source.balance||0)-amount);
+    target.balance=round2(Number(target.balance||0)+amount);
+    b.history.unshift({ts:Date.now(),type:'تحويل ميزانية إلى حساب الالتزام',accountId:source.id,delta:-amount,source:'budget',linkId,raw:'من '+month});
+    b.history.unshift({ts:Date.now(),type:'تحويل ميزانية إلى حساب الالتزام',accountId:target.id,delta:amount,source:'budget',linkId,raw:'من '+month});
+   }
+  }else if(!skip){
+   source.balance=round2(Number(source.balance||0)-amount);
+   b.history.unshift({ts:Date.now(),type:'سداد ميزانية — '+item.name,accountId:source.id,delta:-amount,source:'budget',linkId,raw:'من '+month});
+  }else{
+   b.history.unshift({ts:Date.now(),type:'ميزانية مسددة — عملية بنكية سابقة',accountId:source.id,delta:0,source:'budget',linkId,raw:'سداد مدرج مسبقًا في الحساب البنكي؛ لم يخصم ثانية'});
+  }
+  if(isVisaItem(item)){
+   const vid=loadItemLinks()[item.id]?.creditDebtId;
+   if(vid){
+    const debt=b.finance.debts.find(x=>x.id===vid && /^فيزا/.test(x.name));
+    if(debt){
+     const similar=(debt.log||[]).some(x=>x.type==='payment'&&Math.abs(Number(x.amount||0)-amount)<0.005);
+     if(!similar){debt.paid=round2(Number(debt.paid||0)+amount);debt.log.unshift({id:'budv'+Date.now(),type:'payment',amount,date:new Date().toISOString(),text:'سداد من ميزانية '+month,source:'budget',debtId:debt.id,linkId})}
+    }
+   }
+  }
+  localStorage.setItem(BANK_KEY,JSON.stringify(b));return true;
+ };
+ togglePaid=function(id){
+  const x=state.items.find(x=>x.id===id);if(!x)return;
+  const next=!x.paid;
+  if(financeSyncBudgetPayment(x,next)===false)return;
+  x.paid=next;save();
+ };
+ // تعديل قيمة بند مسدد يتطلب الرجوع عن الحركة السابقة قبل تعديلها.
+ const oldSaveItem=saveItem;
+ saveItem=function(){
+  const x=state.items.find(z=>z.id===editItemId.value);
+  if(x?.paid && (Number(itemAmount.value||0)!==Number(x.amount||0) || itemAccount.value!==x.accountId)){
+   alert('هذا البند مسدد بالفعل. ألغِ علامة السداد أولًا، ثم عدّل المبلغ أو الحساب وأعد السداد لتحديث الحساب البنكي الصحيح.');return;
+  }
+  oldSaveItem();
+ };
+ const oldDeleteItem=deleteItem;
+ deleteItem=function(id){
+  const x=state.items.find(z=>z.id===id);
+  if(x?.paid){alert('ألغِ علامة «تم السداد» قبل حذف البند، حتى تتم إعادة الرصيد للبنك.');return;}
+  oldDeleteItem(id);
+ };
+ renderBudgetLinks=function(){
+  const host=document.getElementById('budget-accounts');if(!host)return;
+  let box=document.getElementById('financeBankLinks');
+  if(!box){box=document.createElement('div');box.id='financeBankLinks';box.className='finance-link-card';host.prepend(box)}
+  const b=loadBankForBudget(),links=loadLinks(),itemLinks=loadItemLinks();
+  const banks=(b?.accounts||[]).filter(a=>a.kind!=='credit');
+  const options=(sel='')=>'<option value="">غير مربوط</option>'+banks.map(a=>`<option value="${escB(a.id)}" ${sel===a.id?'selected':''}>${escB(a.bank)} — ${escB(a.name)} ••••${escB(a.last4)}</option>`).join('');
+  const debts=(b?.finance?.debts||[]).filter(x=>x.name.startsWith('فيزا'));
+  const debtOpts=(sel='')=>'<option value="">دون تسجيل سداد على الفيزا</option>'+debts.map(x=>`<option value="${escB(x.id)}" ${sel===x.id?'selected':''}>${escB(x.name)} ••••${escB(x.cardLast4||'')}</option>`).join('');
+  box.innerHTML='<h2>الربط المباشر مع الحسابات البنكية</h2><div class="sync-note">الرصيد البنكي الفعلي يُقرأ من مدير الحسابات. ربط المجموعة هو الإعداد الافتراضي؛ ويمكن تخصيص حساب لكل بند. لن يُخصم مبلغ بنكي مرتين إذا اخترت أنه مسجل مسبقًا.</div>'+
+   state.accounts.map(a=>{const id=links[a.id]||'';const bk=banks.find(x=>x.id===id);return `<div class="finance-link-row"><b>${escB(a.name)}</b><select onchange="saveLink('${escB(a.id)}',this.value)">${options(id)}</select></div><div class="tiny">${bk?'الرصيد الحقيقي: '+fmt(bk.balance)+' ريال — ••••'+bk.last4:'لم يتم ربط هذه المجموعة بحساب بنكي'}</div>`}).join('')+
+   '<h2 style="margin-top:15px">تخصيص حساب لكل بند من ميزانية الشهر</h2>'+
+   state.items.map(item=>{const itemId=item.id;const chosen=itemLinks[itemId]?.bankAccountId||'';const inherited=links[item.accountId]||'';return `<div class="fbi-row"><div><label>${escB(item.name)} — ${fmt(item.amount)} ريال</label><div class="tiny">${item.paid?'✓ مسدد':'غير مسدد'} • الافتراضي: ${escB(banks.find(a=>a.id===inherited)?.name||'غير مربوط')}</div></div><div><select onchange="storeItemLink('${escB(itemId)}','bankAccountId',this.value)"><option value="">استخدام حساب المجموعة</option>${banks.map(a=>`<option value="${escB(a.id)}" ${chosen===a.id?'selected':''}>${escB(a.bank)} — ${escB(a.name)} ••••${escB(a.last4)}</option>`).join('')}</select>${isVisaItem(item)?`<div class="tiny">بطاقة الفيزا المرتبطة بسداد هذا البند</div><select onchange="storeItemLink('${escB(itemId)}','creditDebtId',this.value)">${debtOpts(itemLinks[itemId]?.creditDebtId||'')}</select>`:''}</div></div>`}).join('');
+  // استبدل بطاقات الحساب الوهمية بملخص مباشر للبنك، مع بقاء حالة تخصيص الميزانية القديمة.
+  document.querySelectorAll('#accountsList .account-card').forEach((card,i)=>{
+   const a=state.accounts[i];if(!a)return;const id=links[a.id]||'';
+   const live=banks.find(x=>x.id===id);
+   const old=card.querySelector('.row-head .small');
+   if(old)old.textContent=live?'الرصيد البنكي الفعلي: '+fmt(live.balance)+' ريال — بنود المجموعة: '+fmt(state.items.filter(x=>x.accountId===a.id).reduce((n,x)=>n+Number(x.amount||0),0))+' ريال':'غير مربوط بالبنك — الرصيد القديم في الميزانية ليس رصيد البنك';
+   const btn=card.querySelector('.transfer-btn');if(btn)btn.title='هذه علامة تخصيص الميزانية وليست تحويلًا بنكيًا فعليًا';
+  });
+ };
+ const oldBudgetRender=render;
+ render=function(){oldBudgetRender();renderBudgetLinks()};
+ window.addEventListener('storage',e=>{if(e.key===BANK_KEY||e.key===LINK_KEY){render()}});
+ render();
+})();
+</script>
+
+<script>
+ function routeVisaSmsToAccounts(){
+  const raw=document.getElementById('visaSms').value.trim();
+  if(!raw)return toast('ألصق رسالة الفيزا أولًا.');
+  try{
+   const frame=parent.document.getElementById('accounts');
+   const button=parent.document.getElementById('bAccounts');
+   if(!frame||!frame.contentWindow||!button)throw Error('unavailable');
+   parent.showPane('accounts',button);
+   const w=frame.contentWindow;
+   w.openTxn();w.document.getElementById('txt').value=raw;w.previewNormalize();
+   visaSms.value='';visaPreview.innerHTML='';
+  }catch(err){toast('افتح صفحة الحسابات ← إضافة/لصق عملية، والصق الرسالة فيها.');}
+ }
+</script><script>
+// Unified live backup bridge: reads the actual state of the budget page, not a parent frame's cached keys.
+window.addEventListener('message',(event)=>{
+ const d=event.data;if(d?.fcBridge!=='FinanceCenterV6'||!d.requestId)return;
+ const reply=(ok,value,error)=>event.source?.postMessage({fcBridge:'FinanceCenterV6',requestId:d.requestId,ok,value,error},'*');
+ try{
+  if(d.action==='snapshot'){
+   storeActiveMonth();saveRaw(state);
+   reply(true,{budget:JSON.stringify(state),links:localStorage.getItem('finance_budget_links_v1'),itemLinks:localStorage.getItem('finance_budget_item_links_v2')});
+  }else if(d.action==='restore'){
+   const p=d.value;if(!p||!p.budget)throw Error('الميزانية غير موجودة');
+   const x=typeof p.budget==='string'?JSON.parse(p.budget):p.budget;
+   if(!Array.isArray(x.items)||!x.months||typeof x.months!=='object')throw Error('ميزانية غير صالحة');
+   const next=normalize(clone(x));
+   saveRaw(next);
+   if(p.links!==null&&p.links!==undefined)localStorage.setItem('finance_budget_links_v1',typeof p.links==='string'?p.links:JSON.stringify(p.links));
+   if(p.itemLinks!==null&&p.itemLinks!==undefined)localStorage.setItem('finance_budget_item_links_v2',typeof p.itemLinks==='string'?p.itemLinks:JSON.stringify(p.itemLinks));
+   state=next;render();reply(true,{restored:true});
+  }
+ }catch(err){reply(false,null,err.message)}
+});
+</script></body></html>
