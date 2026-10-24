@@ -1,0 +1,1349 @@
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>مدير الحسابات البنكية</title>
+<style>
+body{margin:0;background:#f4f7fb;font-family:Tahoma,Arial;color:#172033}.w{max-width:850px;margin:auto;padding:16px}.top,.box,.bank{background:#fff;border-radius:18px;padding:16px;margin-bottom:12px;box-shadow:0 2px 10px #0001}.top{text-align:center}.sum{font-size:34px;font-weight:800;color:#173f77}.actions{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px}button{border:0;border-radius:12px;padding:12px;font-weight:700}.pri{background:#173f77;color:white}.sec{background:#eaf0f7}.green{background:#167a55;color:#fff}.danger{background:#fff0ef;color:#a00}.bankh{display:flex;justify-content:space-between}.accounts{display:grid;grid-template-columns:1fr 1fr;gap:10px}.acc{border:1px solid #e5e7eb;border-radius:14px;padding:12px}.bal{font-size:24px;font-weight:800;margin:8px 0}.muted{font-size:12px;color:#6b7280}.modal{position:fixed;inset:0;background:#0007;display:none;align-items:flex-end;z-index:9}.modal.on{display:flex}.sheet{background:white;width:100%;max-width:700px;margin:auto;border-radius:22px 22px 0 0;padding:16px;max-height:90vh;overflow:auto}.f{margin:9px 0}.f label{display:block;font-size:13px;color:#6b7280;margin-bottom:4px}.f input,.f textarea{width:100%;box-sizing:border-box;padding:11px;border:1px solid #d7dce3;border-radius:10px;font-size:16px}.f textarea{min-height:150px}.row{display:flex;gap:8px}.row>*{flex:1}.cardrow{display:flex;gap:6px;margin-top:6px}.cardrow input{flex:1}.msg{margin-top:9px;padding:10px;border-radius:10px;display:none}.ok{display:block;background:#eaf7f1;color:#165f45}.warn{display:block;background:#fff7e6}.err{display:block;background:#fff0ef;color:#8f1d16}@media(max-width:600px){.accounts{grid-template-columns:1fr}.actions{grid-template-columns:1fr 1fr}.actions button:last-child{grid-column:1/-1}}
+</style>
+<style id="financeAccountsPatch">
+.fin-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.fin-stat{background:#f7f9fc;border:1px solid #e2e8f0;border-radius:13px;padding:10px;text-align:center}.fin-stat b{display:block;font-size:20px;color:#173f77}.debt-card{border:1px solid #e5e7eb;border-radius:14px;padding:12px;margin-top:9px}.debt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:8px 0}.debt-grid>div{background:#f8fafc;border-radius:9px;padding:7px;text-align:center;font-size:12px}.debt-grid b{display:block;font-size:16px}.fund-log{padding:8px 0;border-top:1px solid #edf0f4}.budget-source{color:#7c3aed;font-size:11px}.linked{color:#167a55}@media(max-width:600px){.fin-stats,.debt-grid{grid-template-columns:1fr 1fr}.fin-stats .fin-stat:last-child{grid-column:1/-1}}
+</style>
+<style id="v7MobileFix">html{-webkit-text-size-adjust:100%;text-size-adjust:100%}#am .sheet{padding-bottom:max(18px,env(safe-area-inset-bottom))}#am .f input{direction:auto}#balance{direction:ltr!important;text-align:right}</style></head><body><div class="w">
+<h1>مدير الحسابات والفيزا</h1>
+<div class="top"><div class="muted">إجمالي جميع الحسابات</div><div id="grand" class="sum">0.00 ر.س</div></div>
+<div class="actions"><button class="pri" onclick="openAcc()">+ إضافة حساب</button><button class="sec" onclick="openTxn()">إضافة/لصق عملية</button><button class="sec" onclick="undoLast()">تراجع عن آخر عملية</button><button class="green" onclick="share()">مشاركة الملخص</button><button class="sec" onclick="openBackup()">نسخ احتياطي</button></div>
+<div id="banks"></div>
+<div id="financeOverview" class="box"></div>
+<div id="debtSection" class="box"><div class="bankh"><h2>الفيزا ودين دراهم</h2></div><div id="debtSummary"></div><div id="debtCards"></div><div id="visaLegacyInfo" class="muted" style="margin-top:10px"></div></div>
+<div id="fundSection" class="box" style="display:none"><div class="bankh"><h2>حساب الالتزامات</h2><b id="fundBalanceBig"></b></div><div class="row" style="margin:10px 0"><button class="green" onclick="fundAction('add')">إضافة</button><button class="sec" onclick="fundAction('withdraw')">سحب</button></div><div id="fundLogs"></div></div>
+
+<div class="box"><b>آخر العمليات</b><div id="hist" style="margin-top:8px"></div></div>
+</div>
+
+<div id="am" class="modal"><div class="sheet"><h2 id="at">إضافة حساب</h2><input type="hidden" id="eid">
+<div class="f"><label>البنك</label><input id="bank" placeholder="مثال: الأهلي"></div>
+<div class="f"><label>اسم الحساب</label><input id="name" placeholder="مثال: حساب الصرف"></div>
+<div class="f"><label>آخر 4 أرقام للحساب</label><input id="last4" maxlength="4" inputmode="numeric"></div>
+<div class="f"><label id="balanceLabel">الرصيد الحالي</label><input id="balance" type="text" inputmode="decimal" autocomplete="off" dir="ltr" aria-describedby="balanceHint"><div id="balanceHint" class="muted" style="margin-top:5px"></div></div>
+<div class="f" id="cardsGroup"><label>البطاقات المرتبطة</label><div id="cards"></div><button class="sec" style="width:100%;margin-top:7px" onclick="addCard()">+ إضافة بطاقة أخرى</button></div>
+<div class="row"><button class="pri" onclick="saveAcc()">حفظ</button><button class="sec" onclick="closeM('am')">إلغاء</button></div><div id="amsg" class="msg"></div>
+</div></div>
+
+<div id="tm" class="modal"><div class="sheet"><h2>إضافة/لصق عملية — حساب بنكي أو فيزا</h2>
+<div class="f"><label>ألصق رسالة البنك أو شراء/سداد الفيزا كما وصلتك</label><textarea id="txt" oninput="previewNormalize()"></textarea></div>
+
+<div class="box" style="background:#f8fafc;border:1px solid #e5e7eb;box-shadow:none">
+  <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+    <b>منطقة توحيد صيغة الرسالة</b>
+    <button class="sec" style="padding:8px 10px" onclick="previewNormalize()">تحديث</button>
+  </div>
+  <div class="muted" style="margin-top:6px">يحوّل اختلافات رسائل البنوك إلى صيغة داخلية ثابتة قبل التحليل.</div>
+  <pre id="normPreview" style="white-space:pre-wrap;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;min-height:58px;margin:10px 0 0;font-family:Tahoma,Arial">ألصق الرسالة وسيظهر الشكل الموحد هنا.</pre>
+</div>
+
+<div class="row"><button class="pri" onclick="parseTxn()">تحليل العملية</button><button class="sec" onclick="openTeach()">تعليم صيغة جديدة</button></div>
+<div class="row" style="margin-top:8px"><button class="sec" onclick="closeM('tm')">إغلاق</button></div>
+<div id="tmsg" class="msg"></div>
+<p class="muted">لا يتم تعديل الرصيد إلا بعد تحديد نوع العملية والمبلغ والحساب/البطاقة بثقة. الصيغ التي تعلّمها البرنامج تُحفظ على الجهاز.</p>
+</div></div>
+
+<div id="teachm" class="modal"><div class="sheet"><h2>تعليم صيغة جديدة</h2>
+<div class="f"><label>عبارة مميزة في الرسالة</label><input id="teachKey" placeholder="مثال: شراء-POS"></div>
+<div class="f"><label>نوع العملية</label>
+<select id="teachType" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #d7dce3;border-radius:10px;font-size:16px">
+<option value="purchase">شراء / نقاط بيع</option>
+<option value="withdrawal">سحب نقدي</option>
+<option value="incoming">حوالة واردة</option>
+<option value="outgoing">حوالة صادرة</option>
+<option value="bill">سداد فاتورة</option>
+<option value="moi">مدفوعات وزارة الداخلية</option>
+</select></div>
+<div class="f"><label>طريقة تحديد الحساب</label>
+<select id="teachAccountMode" onchange="toggleTeachAccount()" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #d7dce3;border-radius:10px;font-size:16px">
+<option value="card">من رقم البطاقة الموجود في الرسالة</option>
+<option value="account">من رقم الحساب الموجود في الرسالة</option>
+<option value="fixed">حساب ثابت أختاره الآن</option>
+<option value="ask">اسألني كل مرة</option>
+</select></div>
+<div class="f" id="teachFixedWrap" style="display:none"><label>الحساب الثابت</label>
+<select id="teachFixedAccount" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #d7dce3;border-radius:10px;font-size:16px"></select></div>
+<div class="row"><button class="pri" onclick="saveTeachRule()">حفظ القاعدة</button><button class="sec" onclick="closeM('teachm')">إلغاء</button></div>
+<div id="teachmsg" class="msg"></div>
+</div></div>
+
+<script>
+const K='bank_manager_v11_seeded_exact';
+
+function u(){return 'a'+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+
+function seed(){return {"accounts":[{"id":"ahli0105","bank":"الأهلي","name":"حساب لك / نزول الراتب","last4":"0105","balance":0,"cards":["3304","4473"]},{"id":"ahli0110","bank":"الأهلي","name":"حساب إضافي","last4":"0110","balance":17594.06,"cards":["4435"]},{"id":"inma2000","bank":"الإنماء","name":"الفواتير","last4":"2000","balance":281.8,"cards":["1461"]},{"id":"d3606952","bank":"D360","name":"الحساب الرئيسي","last4":"6952","balance":129.47,"cards":["6562"]},{"id":"d3603934","bank":"D360","name":"بطاقة السواق","last4":"3934","balance":76,"cards":["1782"]},{"id":"d3604078","bank":"D360","name":"حساب الصرف","last4":"4078","balance":1849.23,"cards":["2523"]},{"id":"d3604232","bank":"D360","name":"حساب الجمعية","last4":"4232","balance":3350,"cards":["6496"]}],"history":[{"ts":1789396591410,"type":"شراء نقاط بيع","accountId":"d3603934","delta":-724,"raw":"شراء محلي عبر الإنترنت\n‏مبلغ: SAR 724.00‏\n‏بطاقة: *1782 - mada (Ecommerce)‏\n‏لدى: UNITED ELECTRONIC COMP‏\n‏رقم الحساب: *3934‏\n‏في: 17:35 2026-09-14‏"},{"ts":1789387229370,"type":"شراء نقاط بيع","accountId":"d3603934","delta":-200,"raw":"شراء محلي عبر الإنترنت\n‏مبلغ: SAR 200.00‏\n‏بطاقة: *1782 - mada (Ecommerce)‏\n‏لدى: ALDREES PETROLEUM AND‏\n‏رقم الحساب: *3934‏\n‏في: 12:36 2026-09-14‏"},{"ts":1789310520019,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-156,"raw":"شراء-POS\nبـ156 SAR\nمن pistachio\nمدى-باي*4435\nفي 13/09/26 17:24"},{"ts":1789308595327,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-46,"raw":"شراء-POS\nبـ46 SAR\nمن ALMESBAH\nمدى-باي*4435\nفي 13/09/26 17:08"},{"ts":1789308570501,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-148.18,"raw":"شراء-POS\nبـ148.18 SAR\nمن ASTRA FAR\nمدى-باي*4435\nفي 13/09/26 16:45"},{"ts":1789308555159,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-15,"raw":"شراء-POS\nبـ15 SAR\nمن BUBBLENOO\nمدى-باي*4435\nفي 13/09/26 06:58"},{"ts":1789233928316,"type":"شراء نقاط بيع","accountId":"d3604078","delta":-15,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 15.00‏\n‏بطاقة: *2523 - mada (Apple Pay)‏\n‏لدى: mughasil alshaataa aljadi‏\n‏في: 15:28 2026-09-12‏"},{"ts":1789233874684,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-389.26,"raw":"شراء-POS\nبـ389.26 SAR\nمن ALOTHAIM\nمدى-باي*4435\nفي 12/09/26 10:01"},{"ts":1789233854031,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-77,"raw":"شراء-POS\nبـ77 SAR\nمن Masterpie\nمدى-باي*4435\nفي 12/09/26 19:17"},{"ts":1789199072162,"type":"شراء نقاط بيع","accountId":"d3604078","delta":-22.5,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 22.50‏\n‏بطاقة: *2523 - mada (Apple Pay)‏\n‏لدى: HAMOOD AHMED AIAH ALAHMAR‏\n‏في: 20:10 2026-09-11‏"},{"ts":1789199060367,"type":"حوالة صادرة","accountId":"d3606952","delta":-250,"raw":"<#> ‏رمز التحقق: 6836‏\n‏المبلغ: SAR 250‏\nالخدمة: حوالة داخلية 3Vu5reeDdfj\nحوالة صادرة داخلية\n‏من : *6952‏\n‏مبلغ: SAR 250.00‏\n‏إلى: RAYAN AL BURGHASH‏\n‏رقم الحساب: *7754‏\n‏في: 19:51 2026-09-10‏"},{"ts":1789198889381,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-115,"raw":"شراء نقاط بيع SamsungPay\nبـ115 SAR\nمن Mohammed\nمدى*4435\nفي 11/09/26 17:46"},{"ts":1789198814018,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-44,"raw":"شراء نقاط بيع SamsungPay\nبـ44 SAR\nمن Al Madain\nمدى*4435\nفي 10/09/26 15:42"},{"ts":1788985647636,"type":"حوالة صادرة داخلية","accountId":"ahli0110","delta":-400,"raw":"حوالة صادرة داخلية ب400 SAR \nل9108* يزيد البرغش \n09/09/26 20:03"},{"ts":1788985571428,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-20.5,"raw":"شراء نقاط بيع SamsungPay\nبـ20.50 SAR\nمن Elshamal\nمدى*4435\nفي 09/09/26 16:12"},{"ts":1788923369940,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-26,"raw":"شراء نقاط بيع SamsungPay\nبـ26 SAR\nمن BUBBLENOO\nمدى*4435\nفي 08/09/26 10:43"},{"ts":1788923350866,"type":"شراء نقاط بيع","accountId":"d3604078","delta":-53,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 53.00‏\n‏بطاقة: *2523 - mada (Apple Pay)‏\n‏لدى: TALAH TABOUK CO‏\n‏في: 20:55 2026-09-08‏"},{"ts":1788842779130,"type":"سداد فاتورة","accountId":"inma2000","delta":-106,"raw":"سداد فاتورة\nمبلغ 106 SAR\nالإتصالات السعودية\nلـ الفواتير رقم 05279374160\nفي 26-09-07 16:17"},{"ts":1788842767448,"type":"سداد فاتورة","accountId":"inma2000","delta":-542.58,"raw":"سداد فاتورة\nمبلغ 542.58 SAR\nالإتصالات السعودية\nلـ الفواتير رقم 05133940725\nفي 26-09-07 16:17"},{"ts":1788842734549,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-6,"raw":"شراء نقاط بيع SamsungPay\nبـ6 SAR\nمن Dadoush\nمدى*4435\nفي 08/09/26 07:01"},{"ts":1788621896568,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-50,"raw":"شراء نقاط بيع SamsungPay\nبـ50 SAR\nمن SALON RUK\nمدى*4435\nفي 05/09/26 10:25"},{"ts":1788621564498,"type":"شراء","accountId":"d3604078","delta":-111.88,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 111.88‏\n‏بطاقة: *2523 - mada (Samsung Pay)‏\n‏لدى: ASTRA FARMS 11‏\n‏في: 17:06 2026-09-05‏"},{"ts":1788621546020,"type":"شراء","accountId":"d3604078","delta":-15,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 15.00‏\n‏بطاقة: *2523 - mada (Samsung Pay)‏\n‏لدى: TALAH TABOUK CO‏\n‏في: 16:41 2026-09-05‏"},{"ts":1788608683625,"type":"شراء","accountId":"d3604078","delta":-255,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 255.00‏\n‏بطاقة: *2523 - mada (Samsung Pay)‏\n‏لدى: Talib Zael Marzouq AlAtiy‏\n‏في: 10:48 2026-09-05‏"},{"ts":1788608656387,"type":"شراء","accountId":"d3604078","delta":-400,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 400.00‏\n‏بطاقة: *2523 - mada (Samsung Pay)‏\n‏لدى: Luluat Al Janat Trading C‏\n‏في: 10:58 2026-09-05‏"},{"ts":1788541436005,"type":"شراء","accountId":"d3604078","delta":-40,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 40.00‏\n‏بطاقة: *2523 - mada (Atheer)‏\n‏لدى: Namq AlShamal Co‏\n‏في: 18:35 2026-09-04‏"},{"ts":1788441097741,"type":"شراء","accountId":"d3604078","delta":-1.25,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 1.25‏\n‏بطاقة: *2523 - mada (Samsung Pay)‏\n‏لدى: TALAH TABOUK CO‏\n‏في: 14:38 2026-09-03‏"},{"ts":1788441068012,"type":"شراء","accountId":"d3604078","delta":-11,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 11.00‏\n‏بطاقة: *2523 - mada (Samsung Pay)‏\n‏لدى: TALAH TABOUK CO‏\n‏في: 14:39 2026-09-03‏"},{"ts":1788441039059,"type":"حوالة صادرة داخلية","accountId":"ahli0110","delta":-300,"raw":"حوالة صادرة داخلية ب300 SAR \nل5000* ريان البرغش \n02/09/26 18:33"},{"ts":1788441010258,"type":"مدفوعات وزارة الداخلية","accountId":"ahli0110","delta":-113,"raw":"مدفوعات وزارة الداخلية\nمن 110*880\nمبلغ 113 SAR\nالجهة المخالفات المرورية\nالخدمة الاستعلام عن المخالفات برقم المخالف\nرقم الفاتورة 1006890832\nفي 03/09/26 16:03"},{"ts":1788370246000,"type":"شراء","accountId":"d3604078","delta":-138.38},{"ts":1788370221000,"type":"شراء","accountId":"d3604078","delta":-6},{"ts":1788370190000,"type":"شراء","accountId":"d3604078","delta":-79.9},{"ts":1788370173000,"type":"شراء","accountId":"d3604078","delta":-37},{"ts":1788317703000,"type":"سداد فاتورة","accountId":"inma2000","delta":-46},{"ts":1788317682000,"type":"سداد فاتورة","accountId":"inma2000","delta":-46},{"ts":1788317730000,"type":"سداد فاتورة","accountId":"inma2000","delta":-87.8},{"ts":1788317697000,"type":"سداد فاتورة","accountId":"inma2000","delta":-539.28},{"ts":1788317670000,"type":"سداد فاتورة","accountId":"inma2000","delta":-1202.54},{"ts":1788263705000,"type":"شراء","accountId":"d3606952","delta":-23.5},{"ts":1788263675000,"type":"شراء","accountId":"d3606952","delta":-28}],"seen":{"3ad114ea":1,"93c3e58":1,"5bb8e85c":1,"cb63b6f7":1,"15e77356":1,"80be295b":1,"6a7f209b":1,"1754f90d":1,"39b8c412":1,"b453429e":1,"1edc509":1,"b3c042a5":1,"b34dffc7":1,"7f8cd7da":1,"e85a57b3":1,"a9a1a904":1,"471a3ef4":1,"e3b63c05":1,"634b3e2a":1,"d297efd7":1,"da8c57f2":1,"388cac8":1,"db2b9d41":1,"1117d18a":1,"d463342c":1,"47dc1aa3":1,"d89684f0":1,"d6493da7":1,"38727ff6":1,"4c6ad95":1},"learnedRules":[]};}
+
+function loadState(){
+  try{
+    const existing=JSON.parse(localStorage.getItem(K));
+    if(existing && Array.isArray(existing.accounts) && existing.accounts.length>0) return existing;
+  }catch(e){}
+  const fresh=seed();
+  try{localStorage.setItem(K,JSON.stringify(fresh));}catch(e){}
+  return fresh;
+}
+
+let s=loadState();
+if(!Array.isArray(s.learnedRules)) s.learnedRules=[];
+const m=n=>Number(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' ر.س';
+function save(){localStorage.setItem(K,JSON.stringify(s));render()}
+function msg(id,t,c){let e=document.getElementById(id);e.textContent=t;e.className='msg '+c}
+function closeM(id){document.getElementById(id).classList.remove('on')}
+function addCard(v=''){
+  let d=document.createElement('div');
+  d.className='cardrow';
+  d.innerHTML=`<input maxlength="4" inputmode="numeric" value="${v}" placeholder="آخر 4 أرقام للبطاقة"><button class="danger" onclick="this.parentElement.remove()">حذف</button>`;
+  document.getElementById('cards').appendChild(d);
+}
+function openAcc(id=''){
+  document.getElementById('am').classList.add('on');
+  document.getElementById('amsg').className='msg';
+  document.getElementById('eid').value=id;
+  document.getElementById('cards').innerHTML='';
+  if(id){
+    let a=s.accounts.find(x=>x.id===id);
+    document.getElementById('at').textContent='تعديل / تصحيح الحساب';
+    document.getElementById('bank').value=a.bank;
+    document.getElementById('name').value=a.name;
+    document.getElementById('last4').value=a.last4;
+    document.getElementById('balance').value=a.balance;
+    (a.cards.length?a.cards:['']).forEach(addCard);
+  }else{
+    document.getElementById('at').textContent='إضافة حساب';
+    document.getElementById('bank').value='';
+    document.getElementById('name').value='';
+    document.getElementById('last4').value='';
+    document.getElementById('balance').value='';
+    addCard();
+  }
+}
+function saveAcc(){
+  const id=document.getElementById('eid').value;
+  const b=document.getElementById('bank').value.trim();
+  const n=document.getElementById('name').value.trim();
+  const l=document.getElementById('last4').value.trim();
+  const v=parseFloat(document.getElementById('balance').value);
+  const cs=[...document.querySelectorAll('#cards input')].map(x=>x.value.trim()).filter(Boolean);
+
+  if(!b||!n||!/^[0-9]{4}$/.test(l)||!Number.isFinite(v))
+    return msg('amsg','أكمل بيانات الحساب بشكل صحيح.','err');
+  if(cs.some(x=>!/^[0-9]{4}$/.test(x)))
+    return msg('amsg','أرقام البطاقات يجب أن تكون آخر 4 أرقام.','err');
+
+  let dup=s.accounts.find(x=>x.id!==id&&x.bank===b&&x.last4===l);
+  if(dup) return msg('amsg','هذا الحساب موجود مسبقًا في البنك نفسه. أضف البطاقات إليه بدل إنشاء حساب مكرر.','warn');
+
+  if(id){
+    let a=s.accounts.find(x=>x.id===id),old=a.balance;
+    Object.assign(a,{bank:b,name:n,last4:l,balance:v,cards:cs});
+    if(Math.abs(old-v)>.004)
+      s.history.unshift({ts:Date.now(),type:'تصحيح رصيد',accountId:id,delta:v-old});
+  }else{
+    s.accounts.push({id:u(),bank:b,name:n,last4:l,balance:v,cards:cs});
+  }
+  save();
+  closeM('am');
+}
+function del(id){let a=s.accounts.find(x=>x.id===id);if(confirm('حذف حساب '+a.name+'؟')){s.accounts=s.accounts.filter(x=>x.id!==id);save()}}
+function openTxn(){
+  document.getElementById('tm').classList.add('on');
+  document.getElementById('txt').value='';
+  document.getElementById('tmsg').className='msg';
+  document.getElementById('normPreview').textContent='ألصق الرسالة وسيظهر الشكل الموحد هنا.';
+}
+function clean(t){
+  return (t||'')
+    .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g,' ')
+    .replace(/[–—]/g,'-')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+function amt(t){
+  let q=t.match(/(?:مبلغ|المبلغ)\s*:?\s*(?:SAR\s*)?([\d,]+(?:\.\d{1,2})?)\s*(?:SAR)?/i);
+  if(!q) q=t.match(/(?:^|\s)ب[ـ\s-]*([\d,]+(?:\.\d{1,2})?)\s*SAR\b/i);
+  if(!q) q=t.match(/\bSAR\s*([\d,]+(?:\.\d{1,2})?)/i);
+  return q?parseFloat(q[1].replace(/,/g,'')):null;
+}
+
+function a4(label,t){
+  let q=t.match(new RegExp(label+'\\s*:?\\s*(?:[^\\d]{0,8})?(\\d{4})(?!\\d)','i'));
+  return q?q[1]:null;
+}
+
+function c4(t){
+  let q=t.match(/بطاقة\s*:?\s*\*+\s*(\d{4})/i)
+    ||t.match(/البطاقة المنتهية بالرقم\s*\*+\s*(\d{4})/i)
+    ||t.match(/مدى(?:\s*[-]?\s*باي)?\s*\*+\s*(\d{4})/i)
+    ||t.match(/(?:mada|مدى)[^0-9]{0,12}\*+\s*(\d{4})/i);
+  return q?q[1]:null;
+}
+
+function h(t){
+  let x=2166136261;
+  for(let i=0;i<t.length;i++){x^=t.charCodeAt(i);x=Math.imul(x,16777619)}
+  return (x>>>0).toString(16);
+}
+
+const byA=x=>s.accounts.find(a=>a.last4===x);
+const byC=x=>s.accounts.find(a=>a.cards.includes(x));
+
+function normName(x){return (x||'').replace(/\s+/g,' ').trim()}
+
+function byFriendlyName(name,bankHint=''){
+  const n=normName(name);
+  let matches=s.accounts.filter(a=>normName(a.name)===n);
+  if(bankHint){
+    const scoped=matches.filter(a=>normName(a.bank).includes(bankHint));
+    if(scoped.length===1)return scoped[0];
+  }
+  return matches.length===1?matches[0]:null;
+}
+
+function ch(a,d,type,raw,id){
+  let old=a.balance;
+  a.balance=Math.round((old+d)*100)/100;
+  s.history.unshift({ts:Date.now(),type,accountId:a.id,delta:d,raw});
+  if(id)s.seen[id]=1;
+}
+
+/* ---------- طبقة توحيد صيغة الرسائل ---------- */
+
+function detectType(t){
+  if(/عملية مرفوضة|الرصيد غير كافي/.test(t)) return 'rejected';
+  if(/تحويل بين حساباتك/.test(t)) return 'transfer';
+  if(/حوالة واردة/.test(t)) return 'incoming';
+  if(/حوالة محلية صادرة|حوالة صادرة داخلية/.test(t)) return 'outgoing';
+  if(/مدفوعات وزارة الداخلية/.test(t)) return 'moi';
+  if(/سداد فاتورة/.test(t)) return 'bill';
+  if(/سحب نقدي/.test(t)) return 'withdrawal';
+  if(/شراء محلي|شراء نقاط بيع|شراء\s*[-]?\s*POS|SamsungPay|ApplePay/i.test(t)) return 'purchase';
+
+  const rule=(s.learnedRules||[]).find(r=>r.key && t.toLowerCase().includes(r.key.toLowerCase()));
+  return rule?rule.type:null;
+}
+
+function learnedRuleFor(t){
+  return (s.learnedRules||[]).find(r=>r.key && t.toLowerCase().includes(r.key.toLowerCase())) || null;
+}
+
+function normalizeTxn(raw){
+  const t=clean(raw);
+  const type=detectType(t);
+  const value=amt(t);
+  const card=c4(t);
+  const rule=learnedRuleFor(t);
+
+  let fromAccount=a4('من',t);
+  let toAccount=a4('إلى',t);
+  let account=a4('حساب',t);
+  let friendly='';
+
+  let q=t.match(/لـ\s*(.+?)\s+رقم\s+\d+/);
+  if(q) friendly=normName(q[1]);
+
+  let accountId=null;
+  let needAsk=false;
+
+  if(rule){
+    if(rule.accountMode==='fixed') accountId=rule.accountId||null;
+    if(rule.accountMode==='ask') needAsk=true;
+    if(rule.accountMode==='card' && !card) needAsk=true;
+    if(rule.accountMode==='account' && !(fromAccount||account||toAccount)) needAsk=true;
+  }
+
+  const names={
+    purchase:'شراء نقاط بيع',
+    withdrawal:'سحب نقدي',
+    incoming:'حوالة واردة',
+    outgoing:'حوالة صادرة',
+    bill:'سداد فاتورة',
+    moi:'مدفوعات وزارة الداخلية',
+    transfer:'تحويل بين الحسابات',
+    rejected:'عملية مرفوضة'
+  };
+
+  const lines=[];
+  lines.push('النوع: '+(names[type]||'غير معروف'));
+  lines.push('المبلغ: '+(value===null?'غير معروف':value.toFixed(2)+' SAR'));
+  if(card) lines.push('بطاقة: *'+card);
+  if(fromAccount) lines.push('من حساب: *'+fromAccount);
+  if(toAccount) lines.push('إلى حساب: *'+toAccount);
+  if(account && !fromAccount && !toAccount) lines.push('حساب: *'+account);
+  if(friendly) lines.push('اسم الحساب: '+friendly);
+  if(rule) lines.push('قاعدة متعلمة: '+rule.key);
+
+  return {raw,t,type,value,card,fromAccount,toAccount,account,friendly,rule,accountId,needAsk,preview:lines.join('\n')};
+}
+
+function previewNormalize(){
+  const raw=document.getElementById('txt').value.trim();
+  const box=document.getElementById('normPreview');
+  if(!raw){box.textContent='ألصق الرسالة وسيظهر الشكل الموحد هنا.';return}
+  box.textContent=normalizeTxn(raw).preview;
+}
+
+function fillTeachAccounts(){
+  const el=document.getElementById('teachFixedAccount');
+  el.innerHTML=s.accounts.map(a=>`<option value="${a.id}">${a.bank} — ${a.name} (•••• ${a.last4})</option>`).join('');
+}
+
+function toggleTeachAccount(){
+  document.getElementById('teachFixedWrap').style.display=
+    document.getElementById('teachAccountMode').value==='fixed'?'block':'none';
+}
+
+function guessTeachKey(raw){
+  const first=(raw||'').split(/\n/).map(x=>x.trim()).find(Boolean)||'';
+  return first.slice(0,60);
+}
+
+function openTeach(){
+  const raw=document.getElementById('txt').value.trim();
+  document.getElementById('teachm').classList.add('on');
+  document.getElementById('teachmsg').className='msg';
+  document.getElementById('teachKey').value=guessTeachKey(raw);
+  fillTeachAccounts();
+  toggleTeachAccount();
+}
+
+function saveTeachRule(){
+  const key=document.getElementById('teachKey').value.trim();
+  const type=document.getElementById('teachType').value;
+  const accountMode=document.getElementById('teachAccountMode').value;
+  const accountId=accountMode==='fixed'?document.getElementById('teachFixedAccount').value:null;
+
+  if(key.length<2) return msg('teachmsg','اكتب عبارة مميزة موجودة في هذه الصيغة.','err');
+
+  s.learnedRules=(s.learnedRules||[]).filter(r=>r.key.toLowerCase()!==key.toLowerCase());
+  s.learnedRules.push({id:u(),key,type,accountMode,accountId,createdAt:Date.now()});
+  save();
+  msg('teachmsg','تم حفظ القاعدة. ستُستخدم تلقائيًا مع الرسائل المشابهة لاحقًا.','ok');
+  setTimeout(()=>{
+    closeM('teachm');
+    previewNormalize();
+  },500);
+}
+
+let pendingTxn=null;
+
+function chooseAccountForTxn(bankHint, amountValue, type, raw, msgText, seenId, deltaSign=-1){
+  const accounts = bankHint
+    ? s.accounts.filter(a => (a.bank||'').includes(bankHint))
+    : s.accounts.slice();
+
+  if(!accounts.length) return msg('tmsg','لا توجد حسابات مسجلة للاختيار منها.','warn');
+
+  pendingTxn={amount:amountValue,type,raw,msgText,seenId,deltaSign};
+
+  document.getElementById('chooseInfo').textContent =
+    type+' — '+m(amountValue)+'\nاختر الحساب الصحيح لهذه العملية.';
+
+  const groups={};
+  accounts.forEach(a => (groups[a.bank] ??= []).push(a));
+
+  document.getElementById('chooseList').innerHTML =
+    Object.entries(groups).map(([bank,arr]) =>
+      `<div style="margin:10px 0 4px;font-weight:800">${bank}</div>` +
+      arr.map(a =>
+        `<button class="sec" style="width:100%;margin:5px 0;text-align:right" onclick="applyChosenTxn('${a.id}')">
+          <b>${a.name}</b><br>
+          <span class="muted">الحساب •••• ${a.last4} — الرصيد ${m(a.balance)}</span>
+        </button>`
+      ).join('')
+    ).join('');
+
+  document.getElementById('choosem').classList.add('on');
+}
+
+function applyChosenTxn(accountId){
+  if(!pendingTxn)return;
+  const a=s.accounts.find(x=>x.id===accountId);
+  if(!a)return;
+
+  const delta=(pendingTxn.deltaSign||-1)*pendingTxn.amount;
+  ch(a,delta,pendingTxn.type,pendingTxn.raw,pendingTxn.seenId);
+  save();
+  closeM('choosem');
+  closeM('tm');
+  alert((delta>=0?'تمت إضافة ':'تم خصم ')+m(Math.abs(delta))+(delta>=0?' إلى ':' من ')+a.name);
+  pendingTxn=null;
+}
+
+function parseTxn(){
+  const raw=document.getElementById('txt').value.trim();
+  if(!raw)return msg('tmsg','ألصق الرسالة أولًا.','err');
+
+  const n=normalizeTxn(raw);
+  const id=h(n.t);
+
+  if(s.seen[id])return msg('tmsg','هذه الرسالة محسوبة سابقًا.','warn');
+
+  if(n.type==='rejected'){
+    s.seen[id]=1;save();
+    return msg('tmsg','عملية مرفوضة: لم يتغير الرصيد.','ok');
+  }
+
+  if(n.value===null)return msg('tmsg','لم أستطع استخراج المبلغ. يمكنك تعليم هذه الصيغة، لكن يجب أن تحتوي الرسالة على مبلغ واضح.','err');
+
+  // Learned rule with fixed account
+  if(n.rule && n.rule.accountMode==='fixed'){
+    const a=s.accounts.find(x=>x.id===n.rule.accountId);
+    if(!a)return msg('tmsg','الحساب الثابت في القاعدة لم يعد موجودًا. عدّل/أعد تعليم الصيغة.','warn');
+    const sign=n.type==='incoming'?1:-1;
+    ch(a,sign*n.value,labelForType(n.type),raw,id);
+    save();
+    return msg('tmsg',(sign>0?'تمت إضافة ':'تم خصم ')+m(n.value)+(sign>0?' إلى ':' من ')+a.name+'.','ok');
+  }
+
+  if(n.rule && n.rule.accountMode==='ask'){
+    return chooseAccountForTxn('',n.value,labelForType(n.type),raw,n.t,id,n.type==='incoming'?1:-1);
+  }
+
+  if(n.type==='transfer'){
+    let f=byA(n.fromAccount),to=byA(n.toAccount);
+    if(!f&&!to)return msg('tmsg','التحويل لا يمس حسابًا مسجلًا.','warn');
+    if(f)ch(f,-n.value,'تحويل بين الحسابات',raw,id);
+    if(to)ch(to,n.value,'تحويل بين الحسابات',raw,id);
+    save();
+    return msg('tmsg','تم تحديث الحسابات المرتبطة.','ok');
+  }
+
+  if(n.type==='incoming'){
+    let a=byA(n.account||n.toAccount);
+    if(!a && n.rule?.accountMode==='card') a=byC(n.card);
+    if(!a)return chooseAccountForTxn('',n.value,'حوالة واردة',raw,n.t,id,1);
+    ch(a,n.value,'حوالة واردة',raw,id);save();
+    return msg('tmsg','تمت إضافة الحوالة إلى '+a.name+'.','ok');
+  }
+
+  if(n.type==='outgoing'){
+    let a=byA(n.fromAccount);
+    if(!a && n.rule?.accountMode==='account') a=byA(n.account);
+    if(!a)return chooseAccountForTxn('',n.value,'حوالة صادرة',raw,n.t,id,-1);
+    ch(a,-n.value,'حوالة صادرة',raw,id);save();
+    return msg('tmsg','تم خصم الحوالة من '+a.name+'.','ok');
+  }
+
+  if(n.type==='moi'){
+    let a=byA(n.fromAccount);
+    if(!a && n.rule?.accountMode==='card') a=byC(n.card);
+    if(!a)return chooseAccountForTxn('',n.value,'مدفوعات وزارة الداخلية',raw,n.t,id,-1);
+    ch(a,-n.value,'مدفوعات وزارة الداخلية',raw,id);save();
+    return msg('tmsg','تم خصم '+m(n.value)+' من '+a.name+'.','ok');
+  }
+
+  if(n.type==='bill'){
+    let a=n.friendly?byFriendlyName(n.friendly,'الإنماء'):null;
+    if(!a && n.rule?.accountMode==='card') a=byC(n.card);
+    if(!a && n.rule?.accountMode==='account') a=byA(n.account||n.fromAccount);
+    if(!a)return chooseAccountForTxn('',n.value,'سداد فاتورة',raw,n.t,id,-1);
+    ch(a,-n.value,'سداد فاتورة',raw,id);save();
+    return msg('tmsg','تم خصم '+m(n.value)+' من '+a.name+'.','ok');
+  }
+
+  if(n.type==='purchase' || n.type==='withdrawal'){
+    let a=byC(n.card);
+    if(!a && n.rule?.accountMode==='account') a=byA(n.account||n.fromAccount);
+    if(!a)return chooseAccountForTxn('',n.value,labelForType(n.type),raw,n.t,id,-1);
+    ch(a,-n.value,labelForType(n.type),raw,id);save();
+    return msg('tmsg','تم خصم '+m(n.value)+' من '+a.name+'.','ok');
+  }
+
+  msg('tmsg','لم أتعرف على نوع العملية. استخدم "تعليم صيغة جديدة" مرة واحدة لهذه الصيغة.','err');
+}
+
+function labelForType(type){
+  return ({
+    purchase:'شراء نقاط بيع',
+    withdrawal:'سحب نقدي',
+    incoming:'حوالة واردة',
+    outgoing:'حوالة صادرة',
+    bill:'سداد فاتورة',
+    moi:'مدفوعات وزارة الداخلية'
+  })[type]||'عملية';
+}
+
+function openBackup(){
+  document.getElementById('bm').classList.add('on');
+  document.getElementById('bmsg').className='msg';
+  document.getElementById('backupText').value='';
+  document.getElementById('backupFile').value='';
+}
+
+function backupPayload(){
+  return {
+    app:'مدير الحسابات البنكية',
+    version:'V14',
+    exportedAt:new Date().toISOString(),
+    data:s
+  };
+}
+
+function downloadBackup(){
+  try{
+    const data=JSON.stringify(backupPayload(),null,2);
+    const blob=new Blob([data],{type:'application/json;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    const d=new Date();
+    const pad=n=>String(n).padStart(2,'0');
+    a.href=url;
+    a.download=`bank_accounts_backup_${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    msg('bmsg','تم إنشاء ملف النسخة الاحتياطية. احتفظ به في مكان آمن.','ok');
+  }catch(e){
+    msg('bmsg','تعذر تنزيل الملف في هذا المتصفح. استخدم "نسخ النسخة كنص".','warn');
+  }
+}
+
+async function copyBackup(){
+  const data=JSON.stringify(backupPayload());
+  try{
+    await navigator.clipboard.writeText(data);
+    msg('bmsg','تم نسخ النسخة الاحتياطية كاملة. يمكنك حفظها في الملاحظات أو إرسالها لنفسك.','ok');
+  }catch(e){
+    document.getElementById('backupText').value=data;
+    msg('bmsg','تعذر النسخ التلقائي؛ وضعت النسخة في مربع النص بالأسفل.','warn');
+  }
+}
+
+function validateBackup(obj){
+  const data=obj && obj.data ? obj.data : obj;
+  if(!data || !Array.isArray(data.accounts)) throw new Error('invalid');
+  data.accounts.forEach(a=>{
+    if(!a.id || !a.bank || !a.name || !a.last4 || !Array.isArray(a.cards) || !Number.isFinite(Number(a.balance)))
+      throw new Error('invalid');
+    a.balance=Number(a.balance);
+  });
+  if(!Array.isArray(data.history)) data.history=[];
+  if(!data.seen || typeof data.seen!=='object') data.seen={};
+  return data;
+}
+
+function applyBackupObject(obj){
+  try{
+    const restored=validateBackup(obj);
+    if(!confirm('سيتم استبدال البيانات الحالية بالنسخة الاحتياطية. هل تريد المتابعة؟')) return;
+    s=restored;
+    save();
+    closeM('bm');
+    alert('تمت استعادة النسخة الاحتياطية بنجاح.');
+  }catch(e){
+    msg('bmsg','الملف أو النص ليس نسخة احتياطية صالحة لهذا البرنامج.','err');
+  }
+}
+
+function restoreBackupText(){
+  const t=document.getElementById('backupText').value.trim();
+  if(!t) return msg('bmsg','الصق نص النسخة الاحتياطية أولًا.','warn');
+  try{ applyBackupObject(JSON.parse(t)); }
+  catch(e){ msg('bmsg','تعذر قراءة نص النسخة الاحتياطية.','err'); }
+}
+
+function restoreBackupFile(file){
+  if(!file) return;
+  const r=new FileReader();
+  r.onload=()=>{ try{ applyBackupObject(JSON.parse(r.result)); } catch(e){ msg('bmsg','تعذر قراءة ملف النسخة الاحتياطية.','err'); } };
+  r.readAsText(file,'UTF-8');
+}
+
+function undoLast(){
+  if(!s.history.length){alert('لا توجد عملية للتراجع عنها.');return}
+  const x=s.history.shift();
+  const a=s.accounts.find(y=>y.id===x.accountId);
+  if(!a){alert('الحساب المرتبط بآخر عملية غير موجود.');return}
+  a.balance=Math.round((a.balance-x.delta)*100)/100;
+  if(x.raw){
+    try{ delete s.seen[h(clean(x.raw))]; }catch(e){}
+  }
+  save();
+  alert('تم التراجع عن آخر عملية: '+x.type+' — '+a.name);
+}
+
+
+async function shareAccount(id){
+  const a=s.accounts.find(x=>x.id===id);
+  if(!a)return;
+  const t=`${a.bank}\n${a.name}\nالحساب: •••• ${a.last4}\nالرصيد: ${m(a.balance)}`;
+  if(navigator.share){
+    try{
+      await navigator.share({text:t});
+      return;
+    }catch(e){
+      if(e && e.name==='AbortError') return;
+    }
+  }
+  try{
+    await navigator.clipboard.writeText(t);
+    alert('تم نسخ رصيد الحساب. افتح واتساب والصقه.');
+  }catch(e){
+    alert(t);
+  }
+}
+
+async function share(){let g={};s.accounts.forEach(a=>g[a.bank]=(g[a.bank]||0)+a.balance);let t='ملخص الحسابات البنكية\n\n'+Object.entries(g).map(([b,v])=>b+': '+m(v)).join('\n')+'\n\nالإجمالي: '+m(s.accounts.reduce((x,a)=>x+a.balance,0));if(navigator.share){try{return await navigator.share({text:t})}catch(e){}}try{await navigator.clipboard.writeText(t);alert('تم نسخ الملخص')}catch(e){}}
+function render(){grand.textContent=m(s.accounts.reduce((x,a)=>x+a.balance,0));let g={};s.accounts.forEach(a=>(g[a.bank]??=[]).push(a));banks.innerHTML=Object.entries(g).map(([b,as])=>`<div class="bank"><div class="bankh"><h2>${b}</h2><b>${m(as.reduce((x,a)=>x+a.balance,0))}</b></div><div class="accounts">${as.map(a=>`<div class="acc"><b>${a.name}</b><div class="muted">الحساب •••• ${a.last4}</div><div class="bal">${m(a.balance)}</div><div class="muted">البطاقات: ${a.cards.length?a.cards.map(c=>'•••• '+c).join('، '):'لا توجد'}</div><div class="row" style="margin-top:8px"><button class="green" onclick="shareAccount('${a.id}')">إرسال واتساب</button><button class="sec" onclick="openAcc('${a.id}')">تعديل/تصحيح</button><button class="danger" onclick="del('${a.id}')">حذف</button></div></div>`).join('')}</div></div>`).join('');hist.innerHTML=s.history.slice(0,25).map(x=>{let a=s.accounts.find(y=>y.id===x.accountId);return `<div style="border-top:1px solid #eee;padding:8px 0"><b>${x.type}</b> — ${a?a.name:(x.financeLogId?'الفيزا — دون خصم بنكي':'حساب محذوف')} <span style="float:left">${x.delta>=0?'+':''}${m(x.delta)}</span><div class="muted">${new Date(x.ts).toLocaleString('ar-SA')}</div></div>`}).join('')||'<div class="muted">لا توجد عمليات بعد.</div>'}
+render();
+</script>
+
+<div id="bm" class="modal"><div class="sheet">
+  <h2>النسخ الاحتياطي</h2>
+  <p class="muted">احفظ نسخة من جميع الحسابات والأرصدة والبطاقات وسجل العمليات. يمكنك استعادتها في أي نسخة لاحقة من البرنامج.</p>
+
+  <div class="row">
+    <button class="pri" onclick="downloadBackup()">تنزيل ملف النسخة</button>
+    <button class="sec" onclick="copyBackup()">نسخ النسخة كنص</button>
+  </div>
+
+  <div class="f" style="margin-top:14px">
+    <label>استعادة من ملف نسخة احتياطية</label>
+    <input id="backupFile" type="file" accept=".json,application/json" onchange="restoreBackupFile(this.files[0])">
+  </div>
+
+  <div class="f">
+    <label>أو الصق نص النسخة الاحتياطية هنا</label>
+    <textarea id="backupText" placeholder="الصق النسخة الاحتياطية هنا..."></textarea>
+  </div>
+
+  <div class="row">
+    <button class="green" onclick="restoreBackupText()">استعادة النسخة</button>
+    <button class="sec" onclick="closeM('bm')">إغلاق</button>
+  </div>
+  <div id="bmsg" class="msg"></div>
+</div></div>
+
+<div id="choosem" class="modal"><div class="sheet">
+  <h2>اختر الحساب الذي خرجت منه العملية</h2>
+  <div id="chooseInfo" class="muted" style="margin-bottom:10px;white-space:pre-line"></div>
+  <div id="chooseList"></div>
+  <div class="row" style="margin-top:12px"><button class="sec" onclick="closeM('choosem')">إلغاء</button></div>
+</div></div>
+
+<script id="financeAccountsIntegration">
+const FINANCE_SEED={"debts":[{"id":"visa","name":"بطاقة الفيزا","original":0,"addedDebt":436.97,"paid":0,"log":[{"id":"v1788541586682","date":"2026-09-04T17:06:26.682Z","type":"debt","amount":307,"text":"شراء-POS\nبـ307.00 SAR\nمن WESTERN W\nإئتمانية **0452 (Samsung Pay)\nفي 03/09/26 21:31\nالصرف المتبقي 13994.92 SAR","source":"sms","debtId":"visa"},{"id":"v1786729638924","date":"2026-08-14T17:47:18.924Z","type":"debt","amount":129.97,"text":"شراء-POS\nبـ129.97 SAR\nمن SAUDI MAR\nإئتمانية **0452 (Mada Pay)\nفي 14/08/26 20:28\nالصرف المتبقي 13275.64 SAR","source":"sms","debtId":"visa"}]},{"id":"d1786417942702","name":"فيزا١","original":17600,"addedDebt":4226.779999999999,"paid":1980,"log":[{"id":"v1789233140453","date":"2026-09-12T17:12:20.453Z","type":"debt","amount":85.99,"text":"شراء إنترنت \nبمبلغ 85.99 SAR\nرسوم العمليات الدولية 1.98 SAR\nسعر الصرف 1.00\nبطاقة ائتمانية ***0452\nمن Google ChatGPT\nالتاريخ 12/09/26 18:06\nالصرف المتبقي 11973.19 SAR","source":"sms","debtId":"d1786417942702"},{"id":"v1789199237455","date":"2026-09-12T07:47:17.455Z","type":"debt","amount":49,"text":"شراء إنترنت \nبمبلغ 49.00 SAR\nرسوم العمليات الدولية 1.13 SAR\nسعر الصرف 1.00\nبطاقة ائتمانية ***3817\nمن Netflix.com\nالتاريخ 11/09/26 02:34\nالصرف المتبقي 65805.08 SAR","source":"sms","debtId":"d1786417942702"},{"id":"v1789199192077","date":"2026-09-12T07:46:32.077Z","type":"debt","amount":74.6,"text":"شراء-POS\nبـ74.60 SAR\nمن AlDawaa P\nإئتمانية **0452 (Samsung Pay)\nفي 11/09/26 18:04\nالصرف المتبقي 12061.16 SAR","source":"sms","debtId":"d1786417942702"},{"id":"v1789199166798","date":"2026-09-12T07:46:06.798Z","type":"debt","amount":350.9,"text":"شراء-POS\nبـ350.90 SAR\nمن AlDawaa P\nإئتمانية **0452 (Samsung Pay)\nفي 11/09/26 18:02\nالصرف المتبقي 12135.76 SAR","source":"sms","debtId":"d1786417942702"},{"id":"v1788621937055","date":"2026-09-05T15:25:37.055Z","type":"debt","amount":117.46,"text":"شراء-POS\nبـ117.46 SAR\nمن SAUDI MAR\nإئتمانية **0452 (Samsung Pay)\nفي 05/09/26 17:54\nالصرف المتبقي 13141.98 SAR","source":"sms","debtId":"d1786417942702"},{"id":"v1788599267239","date":"2026-09-05T09:07:47.240Z","type":"debt","amount":659.12,"text":"شراء-POS\nبـ659.12 SAR\nمن SALEM MOH\nإئتمانية **0452 (Samsung Pay)\nفي 05/09/26 11:51\nالصرف المتبقي 13259.44 SAR","source":"sms","debtId":"d1786417942702"},{"id":"v1788544682442","date":"2026-09-04T17:58:02.442Z","type":"debt","amount":53.86,"text":"شراء إنترنت \nمبلغ 53.86 SAR\nبطاقة ائتمانية ***0452 \nمن Keeta\nالتاريخ 04/09/26 20:50\nالصرف المتبقي 13918.56 SAR","source":"sms","debtId":"d1786417942702"},{"id":"v1788541565532","date":"2026-09-04T17:06:05.532Z","type":"debt","amount":21.99,"text":"شراء إنترنت \nبمبلغ 21.99 SAR\nرسوم العمليات الدولية 0.51 SAR\nسعر الصرف 1.00\nبطاقة ائتمانية ***0452\nمن Google CharSwap AI Fa\nالتاريخ 04/09/26 10:50\nالصرف المتبقي 13972.42 SAR","source":"sms","debtId":"d1786417942702"},{"id":"v1788462035503","date":"2026-09-03T19:00:35.503Z","type":"debt","amount":307,"text":"شراء-POS\nبـ307.00 SAR\nمن WESTERN W\nإئتمانية **0452 (Samsung Pay)\nفي 03/09/26 21:31\nالصرف المتبقي 13994.92 SAR","source":"sms","debtId":"d1786417942702"},{"id":"v1788318610750","date":"2026-09-02T03:10:10.751Z","type":"debt","amount":16.99,"text":"شراء إنترنت \nبمبلغ 16.99 SAR\nرسوم العمليات الدولية 0.39 SAR\nسعر الصرف 1.00\nبطاقة ائتمانية ***3817\nمن Google AirDroid File\nالتاريخ 02/09/26 05:08\nالصرف المتبقي 65885.77 SAR","source":"sms","debtId":"d1786417942702"},{"id":"v1787833554337","date":"2026-08-27T12:25:54.338Z","type":"payment","amount":1980,"text":"إدخال مباشر","source":"manual","debtId":"d1786417942702"},{"id":"v1787248634327","date":"2026-08-20T17:57:14.327Z","type":"debt","amount":87.6,"text":"شراء إنترنت \nمبلغ 87.60 SAR\nبطاقة ائتمانية ***0452 \nمن Keeta\nالتاريخ 20/08/26 20:56\nالصرف المتبقي 12844.65 SAR","source":"sms","debtId":"d1786417942702"},{"id":"v1787233815870","date":"2026-08-20T13:50:15.870Z","type":"debt","amount":600,"text":"إدخال مباشر","source":"manual","debtId":"d1786417942702"},{"id":"v1786907656933","date":"2026-08-16T19:14:16.933Z","type":"debt","amount":399,"text":"شراء-POS\nبـ399.00 SAR\nمن ALSAIF GA\nإئتمانية **0452 (Mada Pay)\nفي 15/08/26 22:45\nالصرف المتبقي 12890.85 SAR","source":"sms","debtId":"d1786417942702"},{"id":"v1786907597185","date":"2026-08-16T19:13:17.185Z","type":"debt","amount":69.99,"text":"شراء إنترنت \nبمبلغ 69.99 SAR\nرسوم العمليات الدولية 1.61 SAR\nسعر الصرف 1.00\nبطاقة ائتمانية ***0452\nمن MBC FZ-LLC\nالتاريخ 16/08/26 03:28\nالصرف المتبقي 12819.25 SAR","source":"sms","debtId":"d1786417942702"},{"id":"v1786729606371","date":"2026-08-14T17:46:46.371Z","type":"debt","amount":156.78,"text":"شراء-POS\nبـ156.78 SAR\nمن SAUDI MAR\nإئتمانية **0452 (Mada Pay)\nفي 14/08/26 20:25\nالصرف المتبقي 13405.61 SAR\nشراء-POS\nبـ129.97 SAR\nمن SAUDI MAR\nإئتمانية **0452 (Mada Pay)\nفي 14/08/26 20:28\nالصرف المتبقي 13275.64 SAR","source":"sms","debtId":"d1786417942702"},{"id":"v1786678517169","date":"2026-08-14T03:35:17.169Z","type":"debt","amount":483.5,"text":"شراء إنترنت \nمبلغ 483.50 SAR\nبطاقة ائتمانية ***0452 \nمن Amazon SA\nالتاريخ 14/08/26 06:34\nالصرف المتبقي 13576.61 SAR","source":"sms","debtId":"d1786417942702"},{"id":"v1786640860066","date":"2026-08-13T17:07:40.066Z","type":"debt","amount":693,"text":"شراء-POS\nبـ693.00 SAR\nمن AlDawaa P\nإئتمانية **0452 (Mada Pay)\nفي 13/08/26 19:55\nالصرف المتبقي 14161.68 SAR","source":"sms","debtId":"d1786417942702"},{"id":"dl1786417942703","date":"2026-08-11T03:12:22.703Z","type":"debt","amount":17600,"text":"الرصيد الافتتاحي للدين","source":"manual"}]},{"id":"d1786417955590","name":"فيزا٢","original":1100,"addedDebt":0,"paid":54.59,"log":[{"id":"v1789395446954","date":"2026-09-14T14:17:26.954Z","type":"payment","amount":54.59,"text":"سداد بطاقة ائتمانية\nمن حساب *0110\nالى بطاقة **3817\nمبلغ SAR 54.59\nفي 14/09/26 13:55\nالصرف المتبقي SAR 65859.67","source":"sms","debtId":"d1786417955590"},{"id":"dl1786417955590","date":"2026-08-11T03:12:35.590Z","type":"debt","amount":1100,"text":"الرصيد الافتتاحي للدين","source":"manual"}]},{"id":"d1786417968747","name":"دين دراهم","original":50000,"addedDebt":0,"paid":0,"log":[{"id":"dl1786417968747","date":"2026-08-11T03:12:48.747Z","type":"debt","amount":50000,"text":"الرصيد الافتتاحي للدين","source":"manual"}]}],"fund":{"balance":5791,"log":[{"id":"f1787832662312","date":"2026-08-27T12:11:02.312Z","type":"add","amount":4500,"text":"إدخال مباشر","source":"manual"},{"id":"f1787279790847","date":"2026-08-21T02:36:30.847Z","type":"add","amount":1160,"text":"إدخال مباشر","source":"manual"},{"id":"f1786966973368","date":"2026-08-17T11:42:53.368Z","type":"withdraw","amount":500,"text":"إدخال مباشر","source":"manual"},{"id":"f1786561679990","date":"2026-08-12T19:07:59.990Z","type":"add","amount":630,"text":"‏حوالة واردة: AL INMA BANK‏\n‏مبلغ: SAR 630.00‏\n‏من: TIGIST T WORK****‏\n‏حساب: ****5657‏\n‏في: 2026-08-12 21:52‏","source":"sms"},{"id":"f1786471105701","date":"2026-08-11T17:58:25.701Z","type":"withdraw","amount":769,"text":"تحويل بين حساباتك\n‏من: *5657‏\n‏المبلغ: 769.00 ريال\n‏إلى: *4078‏\n‏في: 2026-08-11  20:57‏","source":"sms"},{"id":"f1786417992397","date":"2026-08-11T03:13:12.397Z","type":"add","amount":770,"text":"إدخال مباشر","source":"manual"}]}};
+function cloneFin(x){return JSON.parse(JSON.stringify(x))}
+function ensureFinanceState(){
+ if(!s.__financeMasterSeed_20260916){const oldRules=Array.isArray(s.learnedRules)?s.learnedRules:[];s={"accounts":[{"id":"ahli0105","bank":"الأهلي","name":"حساب لك / نزول الراتب","last4":"0105","balance":0,"cards":["3304","4473"]},{"id":"ahli0110","bank":"الأهلي","name":"حساب إضافي","last4":"0110","balance":17594.06,"cards":["4435"]},{"id":"inma2000","bank":"الإنماء","name":"الفواتير","last4":"2000","balance":281.8,"cards":["1461"]},{"id":"d3606952","bank":"D360","name":"الحساب الرئيسي","last4":"6952","balance":129.47,"cards":["6562"]},{"id":"d3603934","bank":"D360","name":"بطاقة السواق","last4":"3934","balance":76,"cards":["1782"]},{"id":"d3604078","bank":"D360","name":"حساب الصرف","last4":"4078","balance":1849.23,"cards":["2523"]},{"id":"d3604232","bank":"D360","name":"حساب الجمعية","last4":"4232","balance":3350,"cards":["6496"]}],"history":[{"ts":1789396591410,"type":"شراء نقاط بيع","accountId":"d3603934","delta":-724,"raw":"شراء محلي عبر الإنترنت\n‏مبلغ: SAR 724.00‏\n‏بطاقة: *1782 - mada (Ecommerce)‏\n‏لدى: UNITED ELECTRONIC COMP‏\n‏رقم الحساب: *3934‏\n‏في: 17:35 2026-09-14‏"},{"ts":1789387229370,"type":"شراء نقاط بيع","accountId":"d3603934","delta":-200,"raw":"شراء محلي عبر الإنترنت\n‏مبلغ: SAR 200.00‏\n‏بطاقة: *1782 - mada (Ecommerce)‏\n‏لدى: ALDREES PETROLEUM AND‏\n‏رقم الحساب: *3934‏\n‏في: 12:36 2026-09-14‏"},{"ts":1789310520019,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-156,"raw":"شراء-POS\nبـ156 SAR\nمن pistachio\nمدى-باي*4435\nفي 13/09/26 17:24"},{"ts":1789308595327,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-46,"raw":"شراء-POS\nبـ46 SAR\nمن ALMESBAH\nمدى-باي*4435\nفي 13/09/26 17:08"},{"ts":1789308570501,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-148.18,"raw":"شراء-POS\nبـ148.18 SAR\nمن ASTRA FAR\nمدى-باي*4435\nفي 13/09/26 16:45"},{"ts":1789308555159,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-15,"raw":"شراء-POS\nبـ15 SAR\nمن BUBBLENOO\nمدى-باي*4435\nفي 13/09/26 06:58"},{"ts":1789233928316,"type":"شراء نقاط بيع","accountId":"d3604078","delta":-15,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 15.00‏\n‏بطاقة: *2523 - mada (Apple Pay)‏\n‏لدى: mughasil alshaataa aljadi‏\n‏في: 15:28 2026-09-12‏"},{"ts":1789233874684,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-389.26,"raw":"شراء-POS\nبـ389.26 SAR\nمن ALOTHAIM\nمدى-باي*4435\nفي 12/09/26 10:01"},{"ts":1789233854031,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-77,"raw":"شراء-POS\nبـ77 SAR\nمن Masterpie\nمدى-باي*4435\nفي 12/09/26 19:17"},{"ts":1789199072162,"type":"شراء نقاط بيع","accountId":"d3604078","delta":-22.5,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 22.50‏\n‏بطاقة: *2523 - mada (Apple Pay)‏\n‏لدى: HAMOOD AHMED AIAH ALAHMAR‏\n‏في: 20:10 2026-09-11‏"},{"ts":1789199060367,"type":"حوالة صادرة","accountId":"d3606952","delta":-250,"raw":"<#> ‏رمز التحقق: 6836‏\n‏المبلغ: SAR 250‏\nالخدمة: حوالة داخلية 3Vu5reeDdfj\nحوالة صادرة داخلية\n‏من : *6952‏\n‏مبلغ: SAR 250.00‏\n‏إلى: RAYAN AL BURGHASH‏\n‏رقم الحساب: *7754‏\n‏في: 19:51 2026-09-10‏"},{"ts":1789198889381,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-115,"raw":"شراء نقاط بيع SamsungPay\nبـ115 SAR\nمن Mohammed\nمدى*4435\nفي 11/09/26 17:46"},{"ts":1789198814018,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-44,"raw":"شراء نقاط بيع SamsungPay\nبـ44 SAR\nمن Al Madain\nمدى*4435\nفي 10/09/26 15:42"},{"ts":1788985647636,"type":"حوالة صادرة داخلية","accountId":"ahli0110","delta":-400,"raw":"حوالة صادرة داخلية ب400 SAR \nل9108* يزيد البرغش \n09/09/26 20:03"},{"ts":1788985571428,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-20.5,"raw":"شراء نقاط بيع SamsungPay\nبـ20.50 SAR\nمن Elshamal\nمدى*4435\nفي 09/09/26 16:12"},{"ts":1788923369940,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-26,"raw":"شراء نقاط بيع SamsungPay\nبـ26 SAR\nمن BUBBLENOO\nمدى*4435\nفي 08/09/26 10:43"},{"ts":1788923350866,"type":"شراء نقاط بيع","accountId":"d3604078","delta":-53,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 53.00‏\n‏بطاقة: *2523 - mada (Apple Pay)‏\n‏لدى: TALAH TABOUK CO‏\n‏في: 20:55 2026-09-08‏"},{"ts":1788842779130,"type":"سداد فاتورة","accountId":"inma2000","delta":-106,"raw":"سداد فاتورة\nمبلغ 106 SAR\nالإتصالات السعودية\nلـ الفواتير رقم 05279374160\nفي 26-09-07 16:17"},{"ts":1788842767448,"type":"سداد فاتورة","accountId":"inma2000","delta":-542.58,"raw":"سداد فاتورة\nمبلغ 542.58 SAR\nالإتصالات السعودية\nلـ الفواتير رقم 05133940725\nفي 26-09-07 16:17"},{"ts":1788842734549,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-6,"raw":"شراء نقاط بيع SamsungPay\nبـ6 SAR\nمن Dadoush\nمدى*4435\nفي 08/09/26 07:01"},{"ts":1788621896568,"type":"شراء نقاط بيع","accountId":"ahli0110","delta":-50,"raw":"شراء نقاط بيع SamsungPay\nبـ50 SAR\nمن SALON RUK\nمدى*4435\nفي 05/09/26 10:25"},{"ts":1788621564498,"type":"شراء","accountId":"d3604078","delta":-111.88,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 111.88‏\n‏بطاقة: *2523 - mada (Samsung Pay)‏\n‏لدى: ASTRA FARMS 11‏\n‏في: 17:06 2026-09-05‏"},{"ts":1788621546020,"type":"شراء","accountId":"d3604078","delta":-15,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 15.00‏\n‏بطاقة: *2523 - mada (Samsung Pay)‏\n‏لدى: TALAH TABOUK CO‏\n‏في: 16:41 2026-09-05‏"},{"ts":1788608683625,"type":"شراء","accountId":"d3604078","delta":-255,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 255.00‏\n‏بطاقة: *2523 - mada (Samsung Pay)‏\n‏لدى: Talib Zael Marzouq AlAtiy‏\n‏في: 10:48 2026-09-05‏"},{"ts":1788608656387,"type":"شراء","accountId":"d3604078","delta":-400,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 400.00‏\n‏بطاقة: *2523 - mada (Samsung Pay)‏\n‏لدى: Luluat Al Janat Trading C‏\n‏في: 10:58 2026-09-05‏"},{"ts":1788541436005,"type":"شراء","accountId":"d3604078","delta":-40,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 40.00‏\n‏بطاقة: *2523 - mada (Atheer)‏\n‏لدى: Namq AlShamal Co‏\n‏في: 18:35 2026-09-04‏"},{"ts":1788441097741,"type":"شراء","accountId":"d3604078","delta":-1.25,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 1.25‏\n‏بطاقة: *2523 - mada (Samsung Pay)‏\n‏لدى: TALAH TABOUK CO‏\n‏في: 14:38 2026-09-03‏"},{"ts":1788441068012,"type":"شراء","accountId":"d3604078","delta":-11,"raw":"شراء محلي عن طريق نقاط البيع\n‏مبلغ: SAR 11.00‏\n‏بطاقة: *2523 - mada (Samsung Pay)‏\n‏لدى: TALAH TABOUK CO‏\n‏في: 14:39 2026-09-03‏"},{"ts":1788441039059,"type":"حوالة صادرة داخلية","accountId":"ahli0110","delta":-300,"raw":"حوالة صادرة داخلية ب300 SAR \nل5000* ريان البرغش \n02/09/26 18:33"},{"ts":1788441010258,"type":"مدفوعات وزارة الداخلية","accountId":"ahli0110","delta":-113,"raw":"مدفوعات وزارة الداخلية\nمن 110*880\nمبلغ 113 SAR\nالجهة المخالفات المرورية\nالخدمة الاستعلام عن المخالفات برقم المخالف\nرقم الفاتورة 1006890832\nفي 03/09/26 16:03"},{"ts":1788370246000,"type":"شراء","accountId":"d3604078","delta":-138.38},{"ts":1788370221000,"type":"شراء","accountId":"d3604078","delta":-6},{"ts":1788370190000,"type":"شراء","accountId":"d3604078","delta":-79.9},{"ts":1788370173000,"type":"شراء","accountId":"d3604078","delta":-37},{"ts":1788317703000,"type":"سداد فاتورة","accountId":"inma2000","delta":-46},{"ts":1788317682000,"type":"سداد فاتورة","accountId":"inma2000","delta":-46},{"ts":1788317730000,"type":"سداد فاتورة","accountId":"inma2000","delta":-87.8},{"ts":1788317697000,"type":"سداد فاتورة","accountId":"inma2000","delta":-539.28},{"ts":1788317670000,"type":"سداد فاتورة","accountId":"inma2000","delta":-1202.54},{"ts":1788263705000,"type":"شراء","accountId":"d3606952","delta":-23.5},{"ts":1788263675000,"type":"شراء","accountId":"d3606952","delta":-28}],"seen":{"3ad114ea":1,"93c3e58":1,"5bb8e85c":1,"cb63b6f7":1,"15e77356":1,"80be295b":1,"6a7f209b":1,"1754f90d":1,"39b8c412":1,"b453429e":1,"1edc509":1,"b3c042a5":1,"b34dffc7":1,"7f8cd7da":1,"e85a57b3":1,"a9a1a904":1,"471a3ef4":1,"e3b63c05":1,"634b3e2a":1,"d297efd7":1,"da8c57f2":1,"388cac8":1,"db2b9d41":1,"1117d18a":1,"d463342c":1,"47dc1aa3":1,"d89684f0":1,"d6493da7":1,"38727ff6":1,"4c6ad95":1},"learnedRules":[]};s.learnedRules=oldRules;s.__financeMasterSeed_20260916=true;}
+ s.finance=s.finance&&typeof s.finance==='object'?s.finance:cloneFin(FINANCE_SEED);
+ s.finance.debts=Array.isArray(s.finance.debts)?s.finance.debts:cloneFin(FINANCE_SEED.debts);
+ s.finance.fund=s.finance.fund||cloneFin(FINANCE_SEED.fund);s.finance.fund.log=Array.isArray(s.finance.fund.log)?s.finance.fund.log:[];
+ if(!s.finance.__migrated_20260916){s.finance=Object.assign(cloneFin(FINANCE_SEED),s.finance);s.finance.__migrated_20260916=true;}
+ localStorage.setItem(K,JSON.stringify(s));
+}
+function debtTotal(d){return Number(d.original||0)+Number(d.addedDebt||0)-Number(d.balanceCorrection||0)}function debtRemain(d){return Math.max(0,debtTotal(d)-Number(d.paid||0))}
+function financeTotals(){const rem=s.finance.debts.reduce((z,d)=>z+debtRemain(d),0), paid=s.finance.debts.reduce((z,d)=>z+Number(d.paid||0),0);return{rem,paid}}
+function chooseBankAccount(title){const lines=s.accounts.map((a,i)=>`${i+1}. ${a.bank} — ${a.name} ••••${a.last4}`).join('\n');const v=prompt(title+'\n\n'+lines+'\n\nاكتب الرقم أو اتركه فارغًا بدون ربط:','');if(!v)return null;const i=Number(v)-1;return s.accounts[i]||null}
+function addDebtNew(){const name=prompt('اسم الدين الجديد:');if(!name)return;const amount=Number(prompt('الرصيد الافتتاحي للدين:','0')||0);if(!(amount>0))return;s.finance.debts.push({id:'d'+Date.now(),name,original:amount,addedDebt:0,paid:0,log:[{id:'dl'+Date.now(),date:new Date().toISOString(),type:'debt',amount,text:'الرصيد الافتتاحي',source:'manual'}]});save()}
+function debtAction(id,type){const d=s.finance.debts.find(x=>x.id===id);if(!d)return;const amount=Number(prompt(type==='payment'?'مبلغ السداد:':'مبلغ الدين الإضافي:','')||0);if(!(amount>0))return;if(type==='payment'){d.paid=Number(d.paid||0)+amount;const a=chooseBankAccount('هل خرج السداد من أحد الحسابات؟');if(a){a.balance=Math.round((Number(a.balance||0)-amount)*100)/100;s.history.unshift({ts:Date.now(),type:'سداد دين — '+d.name,accountId:a.id,delta:-amount,raw:'سداد من مدير الحسابات',source:'debt'})}}else d.addedDebt=Number(d.addedDebt||0)+amount;d.log.unshift({id:'v'+Date.now(),date:new Date().toISOString(),type,amount,text:type==='payment'?'سداد':'إضافة دين',source:'manual'});save()}
+function fundAction(type){const amount=Number(prompt(type==='add'?'المبلغ المضاف إلى حساب الالتزامات:':'المبلغ المسحوب من حساب الالتزامات:','')||0);if(!(amount>0))return;const f=s.finance.fund;if(type==='add'){const a=chooseBankAccount('هل تم التحويل من أحد الحسابات البنكية؟');if(a){a.balance=Math.round((Number(a.balance||0)-amount)*100)/100;s.history.unshift({ts:Date.now(),type:'تحويل إلى الالتزامات',accountId:a.id,delta:-amount,raw:'حساب الالتزامات',source:'obligation'})}f.balance=Number(f.balance||0)+amount;}else{f.balance=Number(f.balance||0)-amount;const a=chooseBankAccount('هل أُعيد المبلغ إلى أحد الحسابات البنكية؟');if(a){a.balance=Math.round((Number(a.balance||0)+amount)*100)/100;s.history.unshift({ts:Date.now(),type:'استرداد من الالتزامات',accountId:a.id,delta:amount,raw:'حساب الالتزامات',source:'obligation'})}}f.balance=Math.round(f.balance*100)/100;f.log.unshift({id:'f'+Date.now(),date:new Date().toISOString(),type,amount,text:type==='add'?'إضافة':'سحب',source:'manual'});save()}
+function renderFinanceAddon(){
+ ensureFinanceState();const ft=financeTotals(),assets=s.accounts.reduce((z,a)=>z+Number(a.balance||0),0),fund=Number(s.finance.fund.balance||0);
+ financeOverview.innerHTML=`<h2>الملخص المالي</h2><div class="fin-stats"><div class="fin-stat"><b>${m(assets)}</b><span>الحسابات البنكية</span></div><div class="fin-stat"><b>${m(ft.rem)}</b><span>الديون المتبقية</span></div><div class="fin-stat"><b>${m(fund)}</b><span>حساب الالتزامات</span></div></div>`;
+ debtSummary.innerHTML=`<div class="muted">إجمالي المتبقي: <b>${m(ft.rem)}</b> • إجمالي المسدد: <b>${m(ft.paid)}</b></div>`;
+ debtCards.innerHTML=s.finance.debts.map(d=>`<div class="debt-card"><div class="bankh"><b>${d.name}</b><b>${m(debtRemain(d))}</b></div><div class="debt-grid"><div><b>${m(debtTotal(d))}</b>الإجمالي</div><div><b>${m(d.paid)}</b>المسدد</div><div><b>${d.log.length}</b>عملية</div></div><div class="row"><button class="green" onclick="debtAction('${d.id}','payment')">سداد</button><button class="sec" onclick="debtAction('${d.id}','debt')">إضافة دين</button></div></div>`).join('')||'<div class="muted">لا توجد ديون.</div>';
+ fundBalanceBig.textContent=m(fund);fundLogs.innerHTML=(s.finance.fund.log||[]).slice(0,12).map(x=>`<div class="fund-log"><b class="${x.type==='add'?'linked':''}">${x.type==='add'?'إضافة':'سحب'} — ${m(x.amount)}</b><div class="muted">${new Date(x.date).toLocaleString('ar-SA')}${x.source==='budget'?' • من الميزانية':''}</div></div>`).join('')||'<div class="muted">لا توجد عمليات.</div>';
+}
+ensureFinanceState();const _baseRenderFinance=render;render=function(){_baseRenderFinance();renderFinanceAddon()};
+window.addEventListener('message',e=>{if(e.data==='finance-refresh'){try{s=JSON.parse(localStorage.getItem(K)||'null')||seed()}catch(_){s=seed()}ensureFinanceState();render()}});
+render();
+</script>
+
+<style id="financeV2Styles">
+.visa-extra{background:#f0f6ff;border:1px solid #cbdff8;padding:11px;border-radius:12px;margin-top:9px}
+.visa-extra button{margin:4px;min-height:38px}
+.visa-note{font-size:12px;color:#4b6176;line-height:1.8;margin-top:6px}
+#visaEditor .sheet{max-width:520px}.fin-log-legacy{padding:8px;border-bottom:1px solid #e5e7eb;font-size:12px}
+#visaEditor select,#visaEditor input{width:100%;box-sizing:border-box;padding:11px;border-radius:10px;border:1px solid #ced8e4}
+</style>
+<div id="visaEditor" class="modal"><div class="sheet">
+ <h2 id="visaEditorTitle">بيانات بطاقة الفيزا</h2>
+ <input type="hidden" id="visaEditId">
+ <div class="f"><label>آخر ٤ أرقام من بطاقة الفيزا (لا تدخل الرقم الكامل)</label><input id="visaEditLast4" inputmode="numeric" maxlength="4" placeholder="مثال: 0452"></div>
+ <div class="f"><label>البنك المصدر للبطاقة</label><input id="visaEditIssuer" placeholder="مثال: الأهلي"></div>
+ <div class="visa-note">رقم البطاقة يستخدم لتوجيه عمليات الشراء. تختار حساب السداد عند كل عملية، ولا يوجد حساب سداد ثابت.</div>
+ <div class="row" style="margin-top:12px"><button class="pri" onclick="saveVisaConfig()">حفظ الربط</button><button class="sec" onclick="closeM('visaEditor')">إلغاء</button></div>
+ <div id="visaEditMsg" class="msg"></div>
+</div></div>
+<div id="visaPaymentModal" class="modal"><div class="sheet">
+ <h2 id="visaPaymentTitle">تسجيل سداد الفيزا</h2>
+ <div class="f"><label>مبلغ السداد (ريال)</label><input id="visaPaymentAmount" type="number" min="0.01" step="0.01" inputmode="decimal"></div>
+ <div class="f"><label>الحساب الذي خرج منه السداد في هذه العملية</label><select id="visaPaymentBank"></select></div>
+ <div id="visaPaymentRecognized" class="visa-note"></div>
+ <div class="visa-note">اختر «سبق تسجيل الخصم في الحساب البنكي» إذا أدخلت عملية السداد سابقًا، حتى لا يُخصم المبلغ مرتين. المديونية تنخفض في كلتا الحالتين.</div>
+ <div class="row" style="margin-top:12px"><button class="green" onclick="saveVisaPayment()">تأكيد السداد</button><button class="sec" onclick="closeM('visaPaymentModal')">إلغاء</button></div>
+ <div id="visaPaymentMsg" class="msg"></div>
+</div></div>
+<div id="creditReviewModal" class="modal"><div class="sheet">
+ <h2>مراجعة رسالة الفيزا</h2><p id="creditReviewInfo" class="visa-note"></p>
+ <div class="f"><label>البطاقة</label><select id="creditReviewVisa"></select></div>
+ <div class="f"><label>نوع الحركة</label><select id="creditReviewType" onchange="creditReviewTypeChanged()"></select></div>
+ <div class="f"><label>المبلغ المستخرج من الرسالة (ريال)</label><input type="number" min="0.01" step="0.01" id="creditReviewAmount"></div>
+ <div class="f" id="creditReviewBankWrap"><label>حساب سداد هذه العملية (بدون حساب ثابت)</label><select id="creditReviewBank"></select><p class="visa-note">إذا سُجّل الخصم من البنك مسبقًا، اختر الخيار المخصص لمنع الخصم المكرر.</p></div>
+ <div class="row"><button class="green" onclick="saveCreditReview()">تأكيد تسجيل الرسالة</button><button class="sec" onclick="closeM('creditReviewModal')">إلغاء</button></div>
+ <div id="creditReviewMsg" class="msg"></div>
+ </div></div>
+<div id="legacyFundHistory" class="box" style="display:none"><details><summary style="font-weight:bold;cursor:pointer">الأرشيف: سجل صندوق الالتزامات السابق (للمراجعة فقط)</summary><div id="legacyFundLogList" style="margin-top:10px"></div></details></div>
+<script id="financeAccountsV2">
+(function(){
+ const CREDIT_CARD_RE=/(?:بطاقة\s*(?:ائتمانية|إئتمانية)|إئتمانية|ائتمانية|بطاقة\s*الائتمان|بطاقة\s*ائتمان|سداد\s*بطاقة\s*ائتمانية)[^\n\d]{0,25}(?:\*+\s*)?(\d{4})/i;
+ const round2=n=>Math.round(Number(n||0)*100)/100;
+ const safe=x=>String(x??'').replace(/[&<>"']/g,k=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[k]));
+ function cardOf(text){const txt=String(text||'');const found=txt.match(/(?:الى|إلى)\s*بطاقة\s*\*+\s*(\d{4})/i)||txt.match(CREDIT_CARD_RE);return found?found[1]:null}
+ function migrateFinanceV2(){
+  if(!s.finance||!Array.isArray(s.finance.debts)||s.finance.__financeCenterV2)return false;
+  const F=s.finance;F.archivedDebts=Array.isArray(F.archivedDebts)?F.archivedDebts:[];
+  const ghost=F.debts.filter(x=>x.id==='visa'||x.name==='بطاقة الفيزا');
+  for(const d of ghost)if(!F.archivedDebts.some(z=>z.id===d.id))F.archivedDebts.push(JSON.parse(JSON.stringify({...d,archivedReason:'حساب فيزا مكرر (الرصيد المتبقي صفر)'})));
+  F.debts=F.debts.filter(d=>!ghost.includes(d));
+  let v1=F.debts.find(d=>d.name==='فيزا١'),v2=F.debts.find(d=>d.name==='فيزا٢');
+  if(v1&&v2){
+    const moved=v1.log.filter(x=>x.type==='debt'&&cardOf(x.text)==='3817');
+    if(moved.length){
+     v1.log=v1.log.filter(x=>!moved.includes(x));
+     v2.log=[...moved.map(x=>({...x,debtId:v2.id,migrationNote:'نُقلت من فيزا١ وفق آخر ٤ أرقام'})),...v2.log];
+     const total=moved.reduce((a,x)=>a+Number(x.amount||0),0);
+     v1.addedDebt=round2(Number(v1.addedDebt||0)-total);
+     v2.addedDebt=round2(Number(v2.addedDebt||0)+total);
+     F.migrationNotes=[`تم نقل ${moved.length} من عمليات البطاقة ٣٨١٧ من فيزا١ إلى فيزا٢ دون تغيير إجمالي الديون.`,`توجد إضافة يدوية بقيمة ١٦٫٩٩ ريال في فيزا٢ قد تكون مكررة؛ تُراجع قبل حذفها.`];
+    }
+    v1.cardLast4=v1.cardLast4||'0452';v2.cardLast4=v2.cardLast4||'3817';
+    v1.issuer=v1.issuer||'الأهلي';v2.issuer=v2.issuer||'الأهلي';
+  }
+  F.obligationAccountId='amuju7ih2gtiyr';
+  F.fundArchive=F.fundArchive||JSON.parse(JSON.stringify(F.fund||{balance:0,log:[]}));
+  F.__financeCenterV2=true;
+  localStorage.setItem(K,JSON.stringify(s));
+  return true;
+ }
+ window.migrateFinanceV2=migrateFinanceV2;
+ function ensureFlexibleVisaPayments(){
+  if(!s.finance)return;
+  const debts=s.finance.debts||[];
+  const oldDefaults=debts.filter(d=>d.name?.startsWith('فيزا')&&Object.prototype.hasOwnProperty.call(d,'paymentAccountId'));
+  oldDefaults.forEach(d=>delete d.paymentAccountId);
+  if(oldDefaults.length){s.finance.flexibleVisaPayer=true;localStorage.setItem(K,JSON.stringify(s));}
+ }
+ let pendingVisaPayment=null;
+ function showVisaPayment(debt,amount,raw,source,recognizedAccountId){
+   pendingVisaPayment={debtId:debt.id,raw:raw||'',source:source||'manual'};
+   visaPaymentTitle.textContent='سداد '+debt.name;
+   visaPaymentAmount.value=amount||'';
+   visaPaymentBank.innerHTML='<option value="__choose__">— اختر حالة الخصم البنكي —</option><option value="">سبق تسجيل الخصم في الحساب البنكي؛ لا تخصمه مجددًا</option>'+s.accounts.map(a=>`<option value="${safe(a.id)}">${safe(a.bank)} — ${safe(a.name)} (••••${safe(a.last4)})</option>`).join('');
+   const a=s.accounts.find(x=>x.id===recognizedAccountId);
+   visaPaymentRecognized.textContent=a?'الحساب المذكور في رسالة السداد: '+a.bank+' — '+a.name+' (••••'+a.last4+'). تأكد هل سُجل خصمه بنكيًا من قبل.':'لا يوجد حساب سداد ثابت. اختر الحساب الذي دفعت منه هذا السداد فقط.';
+   visaPaymentMsg.className='msg';
+   visaPaymentModal.classList.add('on');
+ }
+ window.saveVisaPayment=function(){
+   if(!pendingVisaPayment)return;
+   const amount=Number(visaPaymentAmount.value);
+   if(!(amount>0)||!Number.isFinite(amount))return msg('visaPaymentMsg','أدخل مبلغ السداد الصحيح.','err');
+   const accountId=visaPaymentBank.value;
+   if(accountId==='__choose__')return msg('visaPaymentMsg','حدد الحساب المستخدم أو اختر أن الخصم مسجل مسبقًا.','err');
+   if(accountId && !s.accounts.some(x=>x.id===accountId))return msg('visaPaymentMsg','الحساب المختار غير موجود.','err');
+   const debt=s.finance.debts.find(x=>x.id===pendingVisaPayment.debtId);
+   if(!debt)return msg('visaPaymentMsg','تعذر العثور على الفيزا.','err');
+   const ret=addCreditTransaction(debt,'payment',amount,pendingVisaPayment.raw||('سداد مباشر '+debt.name+' '+new Date().toISOString()),pendingVisaPayment.source,accountId);
+   if(!ret.ok)return msg('visaPaymentMsg',ret.reason,'warn');
+   if(pendingVisaPayment.source==='sms')msg('tmsg','تم تسجيل سداد '+debt.name+' بقيمة '+m(amount)+(ret.bankDeducted?' مع خصم الحساب المختار.':' دون خصم بنكي إضافي.'),'ok');
+   pendingVisaPayment=null;
+   closeM('visaPaymentModal');
+ };
+ window.editVisaConfig=function(id){
+  const d=s.finance.debts.find(x=>x.id===id);if(!d||!d.name.startsWith('فيزا'))return;
+  visaEditId.value=d.id;visaEditorTitle.textContent='إعدادات '+d.name;
+  visaEditLast4.value=d.cardLast4||'';visaEditIssuer.value=d.issuer||'';
+  visaEditMsg.className='msg';visaEditor.classList.add('on');
+ };
+ window.saveVisaConfig=function(){
+  const d=s.finance.debts.find(x=>x.id===visaEditId.value);if(!d)return;
+  const card=visaEditLast4.value.trim();
+  if(!/^\d{4}$/.test(card))return msg('visaEditMsg','أدخل آخر أربعة أرقام.','err');
+  if(s.finance.debts.some(x=>x.id!==d.id&&x.cardLast4===card))return msg('visaEditMsg','هذا الرقم مرتبط بفيزا أخرى.','err');
+  d.cardLast4=card;d.issuer=visaEditIssuer.value.trim();delete d.paymentAccountId;
+  save();closeM('visaEditor');
+ };
+ // توحيد إدخال رسائل الائتمان مع الرسائل البنكية في مربع اللصق نفسه.
+ const normalizeCreditDigits=x=>String(x||'').replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/٫/g,'.').replace(/٬/g,',');
+ function creditCardNumbers(t){
+   const x=normalizeCreditDigits(t);
+   const patterns=[
+     /(?:إلى|الى|لـ?)\s*بطاقة\s*(?:ائتمانية|إئتمانية|الائتمان|فيزا)?\s*[:\-]?\s*[*xX•·]*\s*(\d{4})(?!\d)/ig,
+     /(?:بطاقة\s*(?:ائتمانية|إئتمانية|الائتمان|ائتمان|فيزا)|الفيزا|visa|credit\s*card|إئتمانية|ائتمانية)[^\d\n]{0,65}(?:[*xX•·]+\s*|رقم\s*:?\s*)?(\d{4})(?!\d)/ig,
+     /(?:البطاقة\s*الائتمانية\s*المنتهية\s*(?:بالرقم|ب)?)[^\d\n]{0,25}(\d{4})(?!\d)/ig
+   ];
+   const matches=[];
+   for(const re of patterns){for(const v of x.matchAll(re)){if(!matches.includes(v[1]))matches.push(v[1]);}}
+   return matches;
+ }
+ function amountOfCredit(t){
+   const x=normalizeCreditDigits(clean(t)).replace(/(\d),(?=\d{3}(?:\D|$))/g,'$1');
+   const patterns=[
+     /(?:مبلغ|المبلغ|بمبلغ|بقيمة|قيمة\s*(?:العملية|الشراء|السداد)|amount)\s*[:\-]?\s*(?:SAR|ر\.?\s*س\.?|ريال)?\s*([\d,]+(?:\.\d{1,2})?)/i,
+     /(?:شراء\s*[-]?\s*POS|ب[ـ\s]*)\s*([\d,]+(?:\.\d{1,2})?)\s*(?:SAR|ريال|ر\.?س\.?)?/i,
+     /(?:SAR|ر\.?\s*س\.?|ريال)\s*([\d,]+(?:\.\d{1,2})?)/i,
+     /(?:سداد|تسديد|دفعة|خصم)\s*(?:بمبلغ|مبلغ|بقيمة)?\s*([\d,]+(?:\.\d{1,2})?)/i
+   ];
+   for(const pattern of patterns){const match=x.match(pattern);if(match){const a=Number(match[1].replace(/,/g,''));if(Number.isFinite(a)&&a>0)return round2(a);}}
+   return null;
+ }
+ function creditIntent(raw){
+   const x=normalizeCreditDigits(String(raw||''));
+   const cardNums=creditCardNumbers(x);
+   const hasCreditTerms=/(?:ائتمان|إئتمان|فيزا|visa|credit\s*card|بطاقة\s*الائتمان)/i.test(x);
+   const hasMatchedCard=cardNums.some(n=>s.finance?.debts?.some(d=>/^فيزا/.test(d.name)&&d.cardLast4===n));
+   const payment=/(?:سداد|تسديد|تسوية|دفعة|قيد\s*دائن|payment\s*(?:to|for|received)?|card\s*payment|repayment|paid\s*to\s*card|تحويل\s*(?:إلى|الى)\s*بطاقة|إيداع\s*(?:في|على|إلى)\s*بطاقة)/i.test(x);
+   const purchase=/(?:شراء|مشتريات|purchase|online\s*purchase|pos|card\s*debit|خصم|سحب\s*نقدي|استخدام\s*بطاقة)/i.test(x);
+   const explicitCredit=hasCreditTerms||hasMatchedCard;
+   if(!explicitCredit)return null;
+   const type=payment?'payment':purchase?'debt':null;
+   let visa=null,ambiguous=false;
+   const cards=[...new Set(cardNums)];
+   if(cards.length===1){visa=s.finance.debts.find(d=>/^فيزا/.test(d.name)&&d.cardLast4===cards[0])||null;}
+   else if(cards.length>1){ambiguous=true;}
+   // لا نعتمد بطاقة مدى في رسالة سداد الفيزا، ولا نفترض أي بطاقة عند فقد الرقم.
+   const foundSource=[...normalizeCreditDigits(x).matchAll(/(?:من\s*(?:ال)?حساب|خصم\s*من\s*(?:ال)?حساب|from\s*account|الحساب\s*المدين)\s*[:\-]?\s*(?:[*xX•·]+\s*)?(\d{4})(?!\d)/ig)].map(q=>q[1]);
+   const accounts=s.accounts.filter(a=>foundSource.includes(a.last4));
+   return {type,visa,ambiguous,cardNumbers:cards,accountId:accounts.length===1?accounts[0].id:'',sourceFound:accounts.length===1,amount:amountOfCredit(x),raw};
+ }
+ function creditDuplicate(raw){
+   const normalized=clean(normalizeCreditDigits(raw));
+   const digest=h(clean(raw));
+   return !!(s.seen?.[digest]||s.finance.debts.some(d=>(d.log||[]).some(y=>y.text&&(clean(y.text)===clean(raw)||clean(normalizeCreditDigits(y.text))===normalized))));
+ }
+ function addCreditTransaction(d,type,amount,raw,source,linkedBankAccountId){
+   if(!d||!/^فيزا/.test(d.name)||!['payment','debt'].includes(type)||!(amount>0)||!Number.isFinite(amount))return {ok:false,reason:'بيانات حركة الفيزا غير صحيحة.'};
+   if(raw&&creditDuplicate(raw))return {ok:false,reason:'هذه الرسالة مسجلة سابقًا؛ لم نعد خصمها أو إضافتها.'};
+   const account=linkedBankAccountId?s.accounts.find(a=>a.id===linkedBankAccountId):null;
+   if(linkedBankAccountId&&!account)return {ok:false,reason:'حساب السداد المختار غير موجود.'};
+   const id=u();
+   const delta=type==='payment'&&account?-round2(amount):0;
+   const text=raw||((type==='payment'?'سداد':'شراء')+' '+d.name+' '+new Date().toISOString());
+   if(type==='payment')d.paid=round2(Number(d.paid||0)+amount);
+   else d.addedDebt=round2(Number(d.addedDebt||0)+amount);
+   if(account)account.balance=round2(Number(account.balance||0)+delta);
+   d.log.unshift({id,date:new Date().toISOString(),type,amount:round2(amount),text,source,debtId:d.id,payingAccountId:account?.id||'',bankPosted:!!account,bankDelta:delta});
+   s.history.unshift({ts:Date.now(),type:(type==='payment'?'سداد فيزا — ':'شراء فيزا — ')+d.name,accountId:account?.id||null,delta,raw:text,source,financeLogId:id,financeCard:d.cardLast4});
+   if(raw)s.seen[h(clean(raw))]=1;
+   save();return{ok:true,bankDeducted:!!account};
+ }
+ const originalParseTxn=parseTxn;
+ const originalPreviewNormalize=previewNormalize;
+ function creditPreviewText(c){
+   const a=s.accounts.find(x=>x.id===c.accountId);
+   return 'النوع: '+(c.type==='payment'?'سداد فيزا':c.type==='debt'?'شراء بالفيزا':'يتطلب تحديدًا')+'\n'
+    +'المبلغ: '+(c.amount==null?'غير معروف':m(c.amount))+'\n'
+    +'البطاقة: '+(c.visa?c.visa.name+' ••••'+c.visa.cardLast4:(c.cardNumbers.length?'••••'+c.cardNumbers.join(' / ')+' (تحتاج تحديد)':'حدد الفيزا'))+'\n'
+    +'حساب السداد: '+(c.type!=='payment'?'لا يُخصم من الحساب البنكي عند الشراء':a?a.bank+' ••••'+a.last4:'سيُطلب تحديده إذا لم يظهر في الرسالة');
+ }
+ previewNormalize=function(){
+   const raw=txt.value.trim();if(!raw){normPreview.textContent='ألصق الرسالة وسيظهر الشكل الموحد هنا.';return;}
+   const c=creditIntent(raw);if(c){normPreview.textContent=creditPreviewText(c);return;}
+   originalPreviewNormalize();
+ };
+ let pendingCreditReview=null;
+ function creditReview(c){
+   pendingCreditReview=c;
+   creditReviewType.innerHTML='<option value="__choose__">— اختر نوع العملية —</option><option value="debt">شراء / زيادة مديونية</option><option value="payment">سداد / تخفيض مديونية</option>';
+   creditReviewType.value=c.type||'__choose__';
+   creditReviewVisa.innerHTML='<option value="">— اختر فيزا —</option>'+s.finance.debts.filter(d=>/^فيزا/.test(d.name)).map(d=>`<option value="${safe(d.id)}">${safe(d.name)} ••••${safe(d.cardLast4||'')}</option>`).join('');
+   creditReviewVisa.value=c.visa?.id||'';
+   creditReviewAmount.value=c.amount??'';
+   creditReviewBank.innerHTML='<option value="__choose__">— اختر حساب السداد / الحالة —</option><option value="">الخصم البنكي مسجل سابقًا (لا تخصم مجددًا)</option>'+s.accounts.map(a=>`<option value="${safe(a.id)}">${safe(a.bank)} — ${safe(a.name)} ••••${safe(a.last4)}</option>`).join('');
+   creditReviewBank.value=c.accountId||'__choose__';
+   creditReviewInfo.textContent=c.ambiguous?'ورد أكثر من رقم بطاقة في الرسالة؛ اختر الفيزا الصحيحة.':c.visa?'تم التعرف على '+c.visa.name:'تعذر تحديد البطاقة من الرسالة؛ اختر الفيزا.';
+   creditReviewMsg.className='msg';
+   creditReviewBankWrap.style.display=creditReviewType.value==='payment'?'block':'none';
+   creditReviewModal.classList.add('on');
+ }
+ window.creditReviewTypeChanged=function(){creditReviewBankWrap.style.display=creditReviewType.value==='payment'?'block':'none'};
+ window.saveCreditReview=function(){
+   if(!pendingCreditReview)return;
+   const d=s.finance.debts.find(d=>d.id===creditReviewVisa.value),type=creditReviewType.value,amount=Number(creditReviewAmount.value);
+   if(!d)return msg('creditReviewMsg','اختر فيزا ١ أو فيزا ٢.','err');
+   if(!['debt','payment'].includes(type))return msg('creditReviewMsg','اختر نوع العملية من الرسالة قبل الحفظ.','err');
+   if(!Number.isFinite(amount)||amount<=0)return msg('creditReviewMsg','تحقق من مبلغ العملية.','err');
+   const bankId=type==='payment'?creditReviewBank.value:'';
+   if(type==='payment'&&bankId==='__choose__')return msg('creditReviewMsg','حدد الحساب الذي خرج منه السداد، أو أن الخصم مسجل سابقًا.','err');
+   const result=addCreditTransaction(d,type,amount,pendingCreditReview.raw,'sms',bankId);
+   if(!result.ok)return msg('creditReviewMsg',result.reason,'warn');
+   closeM('creditReviewModal');pendingCreditReview=null;
+   msg('tmsg','تم تسجيل '+(type==='payment'?'سداد':'شراء')+' '+m(amount)+' على '+d.name+(result.bankDeducted?' وخصم المبلغ من الحساب البنكي.':type==='payment'?' دون خصم بنكي مكرر.':' دون خصم من الحساب البنكي.'),'ok');
+   txt.value='';previewNormalize();
+ };
+ parseTxn=function(){
+   const raw=txt.value.trim();if(!raw)return originalParseTxn();
+   const c=creditIntent(raw);
+   if(!c)return originalParseTxn();
+   if(creditDuplicate(raw))return msg('tmsg','رسالة الفيزا هذه مسجلة سابقًا ولم يتغير أي رصيد.','warn');
+   if(!c.visa||!c.type||!(c.amount>0)||c.ambiguous)return creditReview(c);
+   if(c.type==='payment'&&!c.sourceFound)return creditReview(c);
+   // سداد موثق بحساب مصدر محدد يُسجَّل مع تحديث الرصيد البنكي آليًا.
+   // إذا وُجدت حركة منفصلة مماثلة في البنك نطلب مراجعة بدل خصم مزدوج.
+   if(c.type==='payment'){
+     const possible=(s.history||[]).some(z=>z.accountId===c.accountId && z.delta<0 && Math.abs(z.delta+c.amount)<0.005 && !z.financeLogId && /(?:فيزا|بطاقة\s*ائتمان|credit\s*card|سداد\s*بطاقة)/i.test(String(z.type||'')+' '+String(z.raw||'')));
+     if(possible){creditReview(c);creditReviewInfo.textContent='توجد حركة بنكية سابقة قد تكون السداد نفسه، وربما تم تسجيلها في الميزانية أيضًا. راجع المديونية قبل المتابعة؛ إن كانت حركة الفيزا مُسجلة أيضًا فألغِ العملية بالكامل.';creditReviewBank.value='__choose__';return;}
+   }
+   const result=addCreditTransaction(c.visa,c.type,c.amount,raw,'sms',c.type==='payment'?c.accountId:'');
+   if(!result.ok)return msg('tmsg',result.reason,'warn');
+   msg('tmsg',(c.type==='payment'?'سداد ':'شراء ')+m(c.amount)+' على '+c.visa.name+(c.type==='payment'?'؛ خُصم من الحساب المذكور في الرسالة.':'؛ زادت المديونية دون خصم من البنك.'),'ok');
+   txt.value='';previewNormalize();
+ };
+ // تقييد إنشاء ديون أخرى؛ دراهم يبقى برصيد وسجل مستقلين.
+ addDebtNew=function(){alert('الديون الأساسية هي فيزا١، فيزا٢، ودين دراهم. يمكنك تعديل أرصدتها دون إنشاء بطاقة فيزا مكررة.')};
+ const oldDebtAction=debtAction;
+ debtAction=function(id,type){
+  const d=s.finance.debts.find(x=>x.id===id);
+  if(!d||!d.name.startsWith('فيزا'))return oldDebtAction(id,type);
+  if(type==='payment')return showVisaPayment(d,'','','manual','');
+  const amount=Number(prompt('قيمة عملية الشراء على '+d.name+':','')||0);
+  if(!(amount>0))return;
+  const ret=addCreditTransaction(d,'debt',amount,'إدخال مباشر '+d.name+' '+new Date().toISOString(),'manual','');
+  if(!ret.ok)alert(ret.reason);
+ };
+ const originalUndo=undoLast;
+ undoLast=function(){
+   const last=s.history?.[0];
+   if(!last?.financeLogId)return originalUndo();
+   const debt=s.finance.debts.find(d=>(d.log||[]).some(x=>x.id===last.financeLogId));
+   if(!debt)return alert('سجل الفيزا المرتبط بهذه الحركة غير موجود؛ لم يتم التراجع.');
+   if(!confirm('هل تريد إلغاء '+last.type+' وتعديل المديونية ورصيد البنك المرتبط، إن وجد؟'))return;
+   const log=debt.log.find(x=>x.id===last.financeLogId),amount=Number(log.amount||0);
+   if(log.type==='payment')debt.paid=round2(Number(debt.paid||0)-amount);
+   else debt.addedDebt=round2(Number(debt.addedDebt||0)-amount);
+   const a=s.accounts.find(a=>a.id===last.accountId);
+   if(a)a.balance=round2(Number(a.balance||0)-Number(last.delta||0));
+   debt.log=debt.log.filter(x=>x.id!==log.id);s.history.shift();
+   if(last.raw)delete s.seen[h(clean(last.raw))];
+   save();alert('تم التراجع عن الحركة في سجل الفيزا والحساب المرتبط.');
+ };
+ const originalRenderFinanceAddon=renderFinanceAddon;
+ renderFinanceAddon=function(){
+  migrateFinanceV2();
+  ensureFlexibleVisaPayments();
+  originalRenderFinanceAddon();
+  const f=s.finance;
+  const realAccount=s.accounts.find(a=>a.id===f.obligationAccountId);
+  financeOverview.innerHTML=`<h2>الملخص المالي الفعلي</h2><div class="fin-stats"><div class="fin-stat"><b>${m(s.accounts.reduce((z,a)=>z+Number(a.balance||0),0))}</b><span>الحسابات البنكية</span></div><div class="fin-stat"><b>${m(financeTotals().rem)}</b><span>الديون المتبقية</span></div><div class="fin-stat"><b>${m(realAccount?.balance||0)}</b><span>D360 الالتزام ••••5657 (ضمن البنوك)</span></div></div><p class="visa-note">حساب الالتزام جزء من إجمالي البنوك أعلاه؛ لا يُضاف مرة أخرى. الرصيد الحقيقي حسب آخر بيانات مُسجلة.</p>`;
+  fundSection.style.display='none';
+  debtCards.innerHTML=f.debts.map(d=>`<div class="debt-card"><div class="bankh"><b>${safe(d.name)}</b><b>${m(debtRemain(d))}</b></div><div class="debt-grid"><div><b>${m(debtTotal(d))}</b>الإجمالي</div><div><b>${m(d.paid)}</b>المسدد</div><div><b>${(d.log||[]).length}</b>عملية</div></div>${d.name.startsWith('فيزا')?`<div class="visa-extra">البطاقة ••••${safe(d.cardLast4||'غير محددة')} — ${safe(d.issuer||'البنك غير محدد')}<div class="visa-note">رسائل شراء وسداد الفيزا تُسجل من «إضافة/لصق عملية» مباشرة.</div><button class="sec" onclick="editVisaConfig('${safe(d.id)}')">بيانات البطاقة</button></div>`:'<div class="visa-note">دين دراهم مستقل، دون ربط تلقائي أو احتساب ضمن حسابات الفيزا.</div>'}<div class="row"><button class="green" onclick="debtAction('${safe(d.id)}','payment')">سداد</button><button class="sec" onclick="debtAction('${safe(d.id)}','debt')">${d.name.startsWith('فيزا')?'شراء / خصم':'زيادة دين'}</button></div></div>`).join('');
+  visaLegacyInfo.textContent='تم أرشفة حساب الفيزا المكرر دون حذف سجلاته. بعض عمليات ٣٨١٧ نُقلت إلى فيزا٢؛ قد توجد إضافة يدوية متكررة بقيمة ١٦٫٩٩ ريال تتطلب مراجعتك.';
+  legacyFundHistory.style.display='block';
+  legacyFundLogList.innerHTML='<div class="visa-note">الرصيد السابق للصندوق: '+m(f.fundArchive?.balance||0)+' — للأرشيف فقط؛ لا يضاف إلى الحساب D360.</div>'+(f.fundArchive?.log||[]).map(x=>`<div class="fin-log-legacy">${safe(x.type==='add'?'إضافة':'سحب')} ${m(x.amount)} • ${safe(x.date?.slice(0,10)||'')} • ${safe(x.text||'')}</div>`).join('');
+ };
+/* Finance Center V5: credit cards are accounts in the same bank ledger. */
+const v5Currency=n=>Math.round(Number(n||0)*100)/100;
+const v5Credit=a=>a?.kind==='credit' && !!a.financeDebtId;
+const v5CreditId=d=>'credit_'+d.id;
+function v5Cards(){return (s.finance?.debts||[]).filter(d=>/^فيزا/.test(d.name))}
+function v5Sync(){
+  migrateFinanceV2();ensureFlexibleVisaPayments();
+  s.accounts=Array.isArray(s.accounts)?s.accounts:[];
+  for(const d of v5Cards()){
+    const id=v5CreditId(d),num=d.cardLast4|| (d.name==='فيزا١'?'0452':'3817');
+    let a=s.accounts.find(x=>x.id===id)||s.accounts.find(x=>v5Credit(x)&&x.financeDebtId===d.id);
+    if(!a){a={id,kind:'credit',financeDebtId:d.id};s.accounts.push(a)}
+    Object.assign(a,{bank:d.issuer||'الأهلي',name:d.accountLabel||d.name,last4:num,cards:[num],kind:'credit',financeDebtId:d.id,
+      balance:v5Currency(Number(d.paid||0)-Number(d.original||0)-Number(d.addedDebt||0)+Number(d.balanceCorrection||0))});
+  }
+  const known=new Set(v5Cards().map(x=>x.id));
+  s.accounts=s.accounts.filter(a=>!v5Credit(a)||known.has(a.financeDebtId));
+  const obliga=s.accounts.find(a=>a.id==='amuju7ih2gtiyr');
+  if(obliga&&s.finance?.obligationAccountId===obliga.id&&s.finance?.fund?.balance) {
+    // Do not add the legacy obligations fund to a real D360 balance.
+    s.finance.fundArchive=s.finance.fundArchive||JSON.parse(JSON.stringify(s.finance.fund));
+  }
+}
+const v5OriginalSave=save;
+save=function(){v5Sync();v5OriginalSave()};
+const v5OriginalRender=render;
+render=function(){
+  v5Sync();v5OriginalRender();
+  const cash=s.accounts.filter(a=>!v5Credit(a)).reduce((n,a)=>n+Number(a.balance||0),0);
+  const cardDebt=v5Cards().reduce((n,d)=>n+Math.max(0,Number(d.original||0)+Number(d.addedDebt||0)-Number(d.paid||0)-Number(d.balanceCorrection||0)),0);
+  const net=s.accounts.reduce((n,a)=>n+Number(a.balance||0),0);
+  grand.textContent=m(net);
+  const subtitle=document.querySelector('.top .muted');if(subtitle)subtitle.textContent='صافي الحسابات البنكية بعد خصم مديونية الفيزا';
+  let groups={};s.accounts.forEach(a=>(groups[a.bank]??=[]).push(a));
+  banks.innerHTML=Object.entries(groups).map(([bank,all])=>{
+    const available=all.filter(a=>!v5Credit(a)),visa=all.filter(v5Credit),groupCash=available.reduce((z,a)=>z+Number(a.balance||0),0),groupDebt=visa.reduce((z,a)=>z+Math.max(0,-Number(a.balance||0)),0);
+    return `<div class="bank"><div class="bankh"><h2>${safe(bank)}</h2><b>${m(groupCash-groupDebt)}</b></div>
+      ${visa.length?`<div class="muted">الأرصدة النقدية: ${m(groupCash)} • مديونية الفيزا: ${m(groupDebt)} • الصافي معًا</div>`:''}
+      <div class="accounts">${all.map(a=>v5Credit(a)?`<div class="acc v5-visa-account" data-credit="${safe(a.id)}"><b>💳 ${safe(a.name)}</b><div class="muted">حساب ائتماني • البطاقة •••• ${safe(a.last4)}</div><div class="bal">${m(a.balance)}</div><div class="muted">${a.balance<0?'الرصيد السالب = مديونية مستحقة':'لا توجد مديونية مستحقة'}. الشراء يزيد الدين والسداد يخفضه.</div><div class="row" style="margin-top:8px"><button class="pri" onclick="openTxn()">لصق رسالة</button><button class="sec" onclick="openAcc('${safe(a.id)}')">تعديل/تصحيح</button></div></div>`:
+      `<div class="acc"><b>${safe(a.name)}</b><div class="muted">الحساب •••• ${safe(a.last4)}</div><div class="bal">${m(a.balance)}</div><div class="muted">البطاقات: ${a.cards.length?a.cards.map(c=>'•••• '+safe(c)).join('، '):'لا توجد'}</div><div class="row" style="margin-top:8px"><button class="green" onclick="shareAccount('${safe(a.id)}')">إرسال واتساب</button><button class="sec" onclick="openAcc('${safe(a.id)}')">تعديل/تصحيح</button><button class="danger" onclick="del('${safe(a.id)}')">حذف</button></div></div>`).join('')}</div></div>`}).join('');
+  hist.innerHTML=s.history.slice(0,35).map(x=>{
+    let a=s.accounts.find(y=>y.id===x.accountId);
+    let visaName=x.financeCard?v5Cards().find(d=>d.cardLast4===x.financeCard)?.name:'';
+    return `<div style="border-top:1px solid #eee;padding:8px 0"><b>${safe(x.type||'عملية')}</b> — ${safe(a?.name||visaName||'سجل سابق')} <span style="float:left">${x.delta>=0?'+':''}${m(x.delta)}</span><div class="muted">${new Date(x.ts).toLocaleString('ar-SA')}</div></div>`;
+  }).join('')||'<div class="muted">لا توجد عمليات بعد.</div>';
+  financeOverview.innerHTML=`<h2>الملخص المالي</h2><div class="fin-stats"><div class="fin-stat"><b>${m(cash)}</b><span>الحسابات النقدية فقط</span></div><div class="fin-stat"><b>${m(cardDebt)}</b><span>مديونية فيزا ١ و٢</span></div><div class="fin-stat"><b>${m(net)}</b><span>الصافي بعد الفيزا</span></div></div><div class="visa-note">بطاقتا الفيزا ضمن الحسابات أعلاه بالفعل، ولا تُطرح مديونيتهما مرة أخرى. دين دراهم يُعرض منفصلًا.</div>`;
+};
+const v5OriginalAddon=renderFinanceAddon;
+renderFinanceAddon=function(){
+ v5OriginalAddon();
+ const d=s.finance.debts.find(x=>x.name==='دين دراهم');
+ debtSection.querySelector('h2').textContent='دين دراهم — مستقل';
+ debtSummary.innerHTML='<div class="muted">فيزا ١ وفيزا ٢ موجودتان الآن ضمن قائمة حسابات الأهلي أعلاه؛ وإدخال عملياتها من «إضافة/لصق عملية» حصريًا.</div>';
+ debtCards.innerHTML=d?`<div class="debt-card"><div class="bankh"><b>${safe(d.name)}</b><b>${m(debtRemain(d))}</b></div><div class="debt-grid"><div><b>${m(debtTotal(d))}</b>الإجمالي</div><div><b>${m(d.paid)}</b>المسدد</div><div><b>${(d.log||[]).length}</b>عملية</div></div><div class="row"><button class="green" onclick="debtAction('${safe(d.id)}','payment')">سداد دراهم</button><button class="sec" onclick="debtAction('${safe(d.id)}','debt')">زيادة دين دراهم</button></div></div>`:'';
+ if(visaLegacyInfo)visaLegacyInfo.textContent='حُفظت جميع العمليات السابقة في سجلها، وحُذفت البطاقة المكررة من الحسابات النشطة.';
+};
+const v5OriginalOpenAcc=openAcc;
+openAcc=function(id=''){const a=s.accounts.find(x=>x.id===id);if(v5Credit(a))return editVisaConfig(a.financeDebtId);return v5OriginalOpenAcc(id)};
+const v5OriginalDel=del;
+del=function(id){if(v5Credit(s.accounts.find(x=>x.id===id)))return alert('بطاقة الفيزا مرتبطة بسجل مديونيتها؛ لا تُحذف كحساب نقدي.');return v5OriginalDel(id)};
+// Never manually enter Visa purchase or payment amounts.
+debtAction=function(id,type){const d=s.finance.debts.find(x=>x.id===id);if(!d)return;
+ if(/^فيزا/.test(d.name))return openTxn();
+ const amount=Number(prompt(type==='payment'?'مبلغ سداد دين دراهم:':'مبلغ الزيادة في دين دراهم:','')||0);
+ if(!(amount>0))return;
+ if(type==='payment')d.paid=v5Currency(Number(d.paid||0)+amount);else d.addedDebt=v5Currency(Number(d.addedDebt||0)+amount);
+ (d.log??=[]).unshift({id:u(),date:new Date().toISOString(),type,amount,text:'دين دراهم — إدخال مستقل',source:'manual',debtId:d.id});save();
+};
+function v5AdjustCredit(c,raw){
+ if(!c)return null;
+ const t=normalizeCreditDigits(clean(raw));
+ if(!c.type&&/(?:حوالة\s*صادرة|تحويل|تم\s*التحويل|خصم\s*لصالح)/i.test(t)&&/(?:إلى|الى|لـ|لصالح)\s*(?:بطاقة|فيزا|visa)/i.test(t))c.type='payment';
+ if(!c.type&&/(?:قيد\s*دائن|سداد|تسديد|دفعة)/i.test(t))c.type='payment';
+ if(!c.type&&/(?:شراء|مشتريات|POS|عملية\s*خصم)/i.test(t))c.type='debt';
+ if(c.type==='debt'&&c.amount&&/رسوم\s*العمليات\s*الدولية/.test(t)){
+   const f=t.match(/رسوم\s*العمليات\s*الدولية\s*:?\s*([\d,]+(?:\.\d{1,2})?)/);
+   if(f){const fee=Number(f[1].replace(/,/g,''));if(Number.isFinite(fee)&&fee>0){c.amount=v5Currency(c.amount+fee);c.internationalFee=fee}}
+ }
+ return c;
+}
+function v5PostedBankCandidate(bankId,amount,raw){
+ if(!bankId)return null;const now=Date.now();
+ const matches=s.history.filter(h=>h.accountId===bankId&&!v5Credit(s.accounts.find(a=>a.id===h.accountId))&&h.delta<0&&Math.abs(Number(h.delta)+amount)<0.005&&(!h.ts||Math.abs(now-h.ts)<14*86400000)&&!h.v5Pair&&!h.financeLogId&&(/(?:فيزا|سداد\s*بطاقة|ائتمان|إئتمان|بطاقة\s*الفيزا|visa|credit\s*card)/i.test(String(h.type||'')+' '+String(h.raw||''))||/سداد ميزانية — فيزا/.test(h.type||'')));
+ if(matches.length===1)return matches[0];
+ return null;
+}
+function v5MatchingCreditPayment(d,amount){const now=Date.now();return(d.log||[]).filter(l=>l.type==='payment'&&l.source==='sms'&&Math.abs(Number(l.amount)-amount)<0.005&&Math.abs(now-new Date(l.date).getTime())<48*3600*1000).slice(0,3)}
+function v5PaymentSource(raw,c){
+ if(c.accountId)return s.accounts.find(a=>a.id===c.accountId&&!v5Credit(a))||null;
+ const t=clean(normalizeCreditDigits(raw));
+ const matches=[...t.matchAll(/(?:من\s*(?:ال)?حساب|الحساب\s*المدين|from\s*account|الحساب\s*المصدر|من\s*رقم\s*الحساب)\s*[:\-]?\s*\**\s*(\d{4})(?!\d)/ig)].map(m=>m[1]);
+ const a=s.accounts.filter(a=>!v5Credit(a)&&matches.includes(a.last4));return a.length===1?a[0]:null;
+}
+function v5AddBankRow(account,amount,raw,pair){
+ account.balance=v5Currency(Number(account.balance||0)-amount);
+ const row={ts:Date.now(),type:'حوالة صادرة إلى '+pair.visaName,accountId:account.id,delta:-amount,raw,source:'sms',v5Pair:pair.id};
+ s.history.unshift(row);return row;
+}
+function v5RegisterRaw(raw){s.seen[h(clean(raw))]=1}
+function v5AlreadySeenCredit(raw){
+ const txt=clean(normalizeCreditDigits(raw));return v5Cards().some(d=>(d.log||[]).some(l=>l.text&&clean(normalizeCreditDigits(l.text))===txt));
+}
+function v5Commit(d,type,amount,raw,sourceAccount,alreadyBankPosted){
+ amount=v5Currency(amount);const logId=u(),pairId='visa_transfer_'+logId;
+ if(type==='debt')d.addedDebt=v5Currency(Number(d.addedDebt||0)+amount);
+ else d.paid=v5Currency(Number(d.paid||0)+amount);
+ const log={id:logId,date:new Date().toISOString(),type,amount,text:raw,source:'sms',debtId:d.id,payingAccountId:sourceAccount?.id||'',bankPosted:!!(sourceAccount&&(alreadyBankPosted||alreadyBankPosted===false)),bankDelta:(sourceAccount&&!alreadyBankPosted)?-amount:0,v5Pair:pairId};
+ d.log.unshift(log);
+ const visaId=v5CreditId(d);
+ // The bank's outgoing transfer and the Visa's incoming transfer have one shared reference.
+ if(type==='payment'&&sourceAccount&&!alreadyBankPosted)v5AddBankRow(sourceAccount,amount,raw,{id:pairId,visaName:d.name});
+ if(type==='payment'&&sourceAccount&&alreadyBankPosted)log.bankDelta=0;
+ s.history.unshift({ts:Date.now(),type:type==='payment'?'حوالة واردة إلى '+d.name:'شراء ببطاقة '+d.name,accountId:visaId,delta:type==='payment'?amount:-amount,raw,source:'sms',financeLogId:logId,financeCard:d.cardLast4,v5Pair:pairId});
+ v5RegisterRaw(raw);save();
+ return log;
+}
+let v5Pending=null;
+function v5ShowPick(c,reason){
+ v5Pending=c;
+ const pick=document.getElementById('v5PickVisa');
+ pick.innerHTML='<option value="">— اختر الفيزا من الرسالة —</option>'+v5Cards().map(d=>`<option value="${safe(d.id)}">${safe(d.name)} ••••${safe(d.cardLast4)}</option>`).join('');
+ pick.value=c.visa?.id||'';
+ document.getElementById('v5PickInfo').textContent=reason+'\nالمبلغ المستخرج: '+(c.amount?m(c.amount):'لم يُتعرف عليه، لن يُسجَّل شيء')+'\nالنوع: '+(c.type==='payment'?'سداد/حوالة واردة':c.type==='debt'?'شراء/خصم':'غير معروف');
+ document.getElementById('v5PickMsg').className='msg';
+ document.getElementById('v5PickModal').classList.add('on');
+}
+window.v5ConfirmPick=function(){
+ const d=v5Cards().find(x=>x.id===document.getElementById('v5PickVisa').value);
+ if(!d||!v5Pending?.amount||!v5Pending?.type)return msg('v5PickMsg','لا يمكن تسجيل العملية دون معرفة البطاقة ونوع الحركة والمبلغ من الرسالة نفسها.','err');
+ const c={...v5Pending,visa:d,ambiguous:false};closeM('v5PickModal');v5Pending=null;v5Process(c);
+};
+function v5Process(c){
+ const d=c.visa,amount=Number(c.amount),raw=c.raw;
+ if(!d||!['debt','payment'].includes(c.type)||!(amount>0))return msg('tmsg','تعذر معرفة البطاقة أو نوع العملية أو مبلغها من نص الرسالة؛ لن يُطلب مبلغ يدوي.','err');
+ if(v5AlreadySeenCredit(raw))return msg('tmsg','رسالة الفيزا مسجلة مسبقًا؛ لم يتغير أي رصيد.','warn');
+ if(s.seen[h(clean(raw))]&&!(s.history||[]).some(l=>l.raw&&clean(l.raw)===clean(raw)&&!l.financeLogId))return msg('tmsg','الرسالة مسجلة سابقًا؛ لم يتغير أي رصيد.','warn');
+ const source=c.type==='payment'?v5PaymentSource(raw,c):null;
+ let oldBank=source?v5PostedBankCandidate(source.id,amount,raw):null;
+ if(source&&s.seen[h(clean(raw))]){oldBank=s.history.find(l=>l.accountId===source.id&&l.delta<0&&Math.abs(l.delta+amount)<0.005&&clean(l.raw)===clean(raw))||oldBank;}
+ if(c.type==='payment'){
+   const matches=v5MatchingCreditPayment(d,amount);
+   if(matches.length){
+     const candidate=matches[0];
+     const distinct=matches.length>1;
+     const confirmText=source&& !candidate.bankPosted?
+        `توجد رسالة سداد سابقة لـ${d.name} بقيمة ${m(amount)} دون خصم بنكي.\nهل هذه رسالة البنك للعملية نفسها؟\nموافق = ربط حساب البنك بالسداد السابق فقط.\nإلغاء = سداد جديد مستقل.`:
+        `يوجد سداد سابق لـ${d.name} بقيمة ${m(amount)} خلال آخر ٤٨ ساعة.\nهل الرسالة الجديدة تخص السداد نفسه؟\nموافق = منع التكرار.\nإلغاء = تسجيل سداد آخر فعلي.`;
+     if(!distinct&&confirm(confirmText)){
+       if(source&&!candidate.bankPosted){
+         const originalAlreadyPosted=!!oldBank;
+         candidate.payingAccountId=source.id;candidate.bankPosted=true;
+         candidate.bankDelta=originalAlreadyPosted?0:-amount;
+         if(!originalAlreadyPosted)v5AddBankRow(source,amount,raw,{id:candidate.v5Pair||candidate.id,visaName:d.name});
+       }
+       v5RegisterRaw(raw);save();
+       msg('tmsg','تمت مطابقة الرسالة مع سداد '+d.name+' السابق'+(source?' وربط الحساب البنكي دون تكرار المديونية.':'.') ,'ok');txt.value='';previewNormalize();return;
+     }
+   }
+ }
+ const bankAlreadyPosted=!!oldBank;
+ v5Commit(d,c.type,amount,raw,source,bankAlreadyPosted);
+ msg('tmsg',c.type==='debt'?`تم تسجيل شراء ${m(amount)} في ${d.name}؛ زادت المديونية دون خصم من أي حساب بنكي.`:
+   `تم تسجيل حوالة سداد ${m(amount)} إلى ${d.name}`+(source?(bankAlreadyPosted?'؛ خصم البنك مسجل سابقًا فلم يُكرر.':' مع الخصم من '+source.name+'.'):'؛ لم تتضمن الرسالة حساب الدفع، لذا لم أفترض حسابًا أو أخصم منه.') ,'ok');
+ txt.value='';previewNormalize();
+}
+const v5PreviousParser=parseTxn;
+parseTxn=function(){
+ const raw=txt.value.trim();if(!raw)return msg('tmsg','ألصق رسالة البنك أولًا.','err');
+ const c=v5AdjustCredit(creditIntent(raw),raw);
+ if(c){
+   if(v5AlreadySeenCredit(raw))return msg('tmsg','رسالة الفيزا مسجلة من قبل ولم نعد تسجيلها.','warn');
+   if(!c.amount||!c.type)return msg('tmsg','لا يمكن استخراج مبلغ الفيزا أو نوع العملية من الرسالة. لم يتغير الرصيد، ولا توجد خانة إدخال مبلغ يدوي.','err');
+   if(!c.visa||c.ambiguous)return v5ShowPick(c,'تعذر تحديد أي الفيزتين تخص هذه الرسالة؛ اختر البطاقة فقط.');
+   return v5Process(c);
+ }
+ // Existing bank message analyzer remains unchanged for normal accounts.
+ return v5PreviousParser();
+};
+previewNormalize=function(){
+ const raw=txt.value.trim();if(!raw){normPreview.textContent='ألصق رسالة البنك وسيظهر التحليل هنا.';return}
+ const c=v5AdjustCredit(creditIntent(raw),raw);
+ if(c){const source=v5PaymentSource(raw,c);
+  normPreview.textContent='نوع العملية: '+(c.type==='payment'?'سداد فيزا ← حوالة واردة':c.type==='debt'?'شراء فيزا ← زيادة المديونية':'تعذر تحديد النوع')+'\n'+
+   'حساب الفيزا: '+(c.visa?c.visa.name+' ••••'+c.visa.cardLast4:'يحتاج اختيار البطاقة')+'\n'+
+   'المبلغ من الرسالة: '+(c.amount?m(c.amount)+(c.internationalFee?' (يشمل رسوم العملية الدولية '+m(c.internationalFee)+')':''):'غير معروف')+'\n'+
+   'حساب السداد: '+(c.type!=='payment'?'لا يُخصم البنك عند الشراء':source?source.bank+' '+source.name+' ••••'+source.last4:'لم يذكر؛ لن يخصم حساب آخر دون دليل');
+  return;
+ }
+ normPreview.textContent=normalizeTxn(raw).preview;
+};
+// Reverse exactly the affected rows. A bank transfer that was already recorded independently must be left intact.
+const v5PreviousUndo=undoLast;
+undoLast=function(){
+ const last=s.history?.[0];if(!last?.v5Pair)return v5PreviousUndo();
+ if(!confirm('التراجع عن هذه العملية وآثارها المرتبطة فقط؟'))return;
+ if(last.financeLogId){
+   const d=v5Cards().find(x=>(x.log||[]).some(y=>y.id===last.financeLogId));if(!d)return alert('تعذر العثور على سجل الفيزا.');
+   const log=d.log.find(x=>x.id===last.financeLogId);
+   if(log.type==='payment')d.paid=v5Currency(Number(d.paid||0)-Number(log.amount||0));
+   else d.addedDebt=v5Currency(Number(d.addedDebt||0)-Number(log.amount||0));
+   d.log=d.log.filter(x=>x!==log);
+   const paired=s.history.find(x=>x.v5Pair===last.v5Pair && !x.financeLogId);
+   if(paired){const a=s.accounts.find(x=>x.id===paired.accountId);if(a)a.balance=v5Currency(Number(a.balance||0)-Number(paired.delta||0));}
+   s.history=s.history.filter(x=>x.v5Pair!==last.v5Pair);
+   if(last.raw)delete s.seen[h(clean(last.raw))];
+ }else{
+   const a=s.accounts.find(x=>x.id===last.accountId);if(a)a.balance=v5Currency(Number(a.balance||0)-Number(last.delta||0));
+   const log=v5Cards().flatMap(x=>x.log||[]).find(x=>x.v5Pair===last.v5Pair);
+   if(log){log.bankPosted=false;log.bankDelta=0;log.payingAccountId='';}
+   s.history.shift();if(last.raw)delete s.seen[h(clean(last.raw))];
+ }
+ save();alert('تم التراجع مع الحفاظ على بقية الحسابات.');
+};
+// Ensure both backup migration and iframe refresh use the same account model.
+const v5OldRestore=applyBackupObject;
+applyBackupObject=function(obj){return v5OldRestore(obj)};
+/* Finance Center V7: one account editor for bank accounts and credit cards.
+   Never change a credit card's displayed balance without changing its single debt source.
+   Cash and credit account IDs and existing transaction logs are immutable. */
+const v7Digits=value=>String(value??'')
+ .replace(/[٠-٩]/g,ch=>String('٠١٢٣٤٥٦٧٨٩'.indexOf(ch)))
+ .replace(/[۰-۹]/g,ch=>String('۰۱۲۳۴۵۶۷۸۹'.indexOf(ch)))
+ .replace(/[−﹣–—]/g,'-').replace(/٫/g,'.').replace(/٬/g,',').trim();
+function v7Amount(value){
+ let x=v7Digits(value).replace(/[\s\u00a0\u200e\u200f]/g,'');
+ // A single comma followed by 1-2 digits is a decimal separator.
+ if(/^[-+]?\d+,\d{1,2}$/.test(x))x=x.replace(',','.');
+ else x=x.replace(/,/g,'');
+ if(!/^[-+]?\d+(?:\.\d{1,2})?$/.test(x))return NaN;
+ const n=Number(x);return Number.isFinite(n)?n:NaN;
+}
+const v7BaseOpenAcc=openAcc;
+openAcc=function(id=''){
+ const acc=id?s.accounts.find(x=>x.id===id):null;
+ if(id&&!acc){alert('هذا الحساب غير موجود؛ أعد فتح قائمة الحسابات.');return;}
+ if(!v5Credit(acc))v7BaseOpenAcc(id);
+ else{
+   document.getElementById('am').classList.add('on');
+   document.getElementById('amsg').className='msg';
+   document.getElementById('eid').value=acc.id;
+   document.getElementById('at').textContent='تعديل / تصحيح '+acc.name;
+   document.getElementById('bank').value=acc.bank;
+   document.getElementById('name').value=acc.name;
+   document.getElementById('last4').value=acc.last4;
+   document.getElementById('balance').value=v5Currency(acc.balance).toFixed(2);
+   document.getElementById('cards').innerHTML='';
+ }
+ const credit=!!(acc&&v5Credit(acc));
+ document.getElementById('cardsGroup').style.display=credit?'none':'block';
+ document.getElementById('balanceLabel').textContent=credit?'الرصيد الحالي للفيزا (سالب = مديونية)':'الرصيد الحالي';
+ document.getElementById('balanceHint').textContent=credit?
+  'مثال: ‎-12636.44 يعني مديونية ١٢٬٦٣٦٫٤٤ ريال. تصحيح الرصيد يُسجل مستقلًا، ولا يغيّر رسائل الشراء والسداد السابقة.':
+  'أدخل الرصيد كما يظهر في البنك. يمكن استخدام الأرقام العربية أو الإنجليزية، مع علامة السالب.';
+ if(!credit&&id){ // normalize existing values while retaining their stored exact identity
+   document.getElementById('balance').value=v5Currency(Number(acc.balance||0)).toFixed(2);
+ }
+};
+// Retain original account data until all fields have passed validation.
+saveAcc=function(){
+ const id=document.getElementById('eid').value,acc=id?s.accounts.find(a=>a.id===id):null;
+ if(id&&!acc)return msg('amsg','الحساب غير موجود. ألغِ النافذة ثم أعد فتحه.','err');
+ const isCredit=v5Credit(acc),b=document.getElementById('bank').value.trim(),n=document.getElementById('name').value.trim();
+ const l=v7Digits(document.getElementById('last4').value).replace(/\s/g,'');
+ const amount=v7Amount(document.getElementById('balance').value);
+ if(!b)return msg('amsg','حقل البنك فارغ؛ أدخل اسم البنك.','err');
+ if(!n)return msg('amsg','حقل اسم الحساب فارغ؛ أدخل الاسم.','err');
+ if(!/^\d{4}$/.test(l))return msg('amsg','رقم الحساب يجب أن يتكون من آخر ٤ أرقام فقط.','err');
+ if(!Number.isFinite(amount))return msg('amsg','الرصيد غير مقبول؛ اكتبه مثل 1 أو -461.01 دون رمز عملة.','err');
+ const cs=isCredit?[l]:[...document.querySelectorAll('#cards input')]
+   .map(x=>v7Digits(x.value).replace(/\s/g,'')).filter(Boolean);
+ if(cs.some(x=>!/^\d{4}$/.test(x)))return msg('amsg','كل رقم بطاقة مرتبط يجب أن يكون ٤ أرقام.','err');
+ if(new Set(cs).size!==cs.length)return msg('amsg','يوجد رقم بطاقة مكرر داخل الحساب نفسه.','err');
+ if(s.accounts.some(a=>a.id!==id && a.bank.trim().toLowerCase()===b.toLowerCase() && a.last4===l))
+   return msg('amsg','يوجد حساب أو فيزا بنفس آخر ٤ أرقام لدى هذا البنك.','err');
+ if(isCredit){
+   const debt=v5Cards().find(d=>d.id===acc.financeDebtId);
+   if(!debt)return msg('amsg','سجل مديونية الفيزا غير موجود؛ لم يُحفظ أي تغيير.','err');
+   if(v5Cards().some(d=>d.id!==debt.id&&d.cardLast4===l))return msg('amsg','رقم البطاقة مرتبط بفيزا أخرى.','err');
+   const oldBalance=v5Currency(Number(debt.paid||0)-Number(debt.original||0)-Number(debt.addedDebt||0)+Number(debt.balanceCorrection||0));
+   const difference=v5Currency(amount-oldBalance);
+   debt.cardLast4=l;debt.issuer=b;debt.accountLabel=n;
+   if(Math.abs(difference)>=0.005){
+     debt.balanceCorrection=v5Currency(Number(debt.balanceCorrection||0)+difference);
+     s.history.unshift({ts:Date.now(),type:'تصحيح رصيد '+debt.name,accountId:acc.id,delta:difference,
+       source:'credit-correction',raw:'تصحيح الرصيد بالتحرير؛ دون تغيير حركات الشراء والسداد القديمة'});
+     debt.correctionLog=Array.isArray(debt.correctionLog)?debt.correctionLog:[];
+     debt.correctionLog.unshift({ts:Date.now(),previous:oldBalance,newBalance:v5Currency(amount),delta:difference});
+   }
+ }else if(acc){
+   const old=v5Currency(acc.balance);
+   Object.assign(acc,{bank:b,name:n,last4:l,balance:v5Currency(amount),cards:cs});
+   const delta=v5Currency(amount-old);
+   if(Math.abs(delta)>=0.005)s.history.unshift({ts:Date.now(),type:'تصحيح رصيد',accountId:acc.id,delta});
+ }else s.accounts.push({id:u(),bank:b,name:n,last4:l,balance:v5Currency(amount),cards:cs});
+ save();closeM('am');
+};
+// Undo a credit balance correction by reversing its accounting adjustment, not only the visual balance.
+const v7PriorUndo=undoLast;
+undoLast=function(){
+ const last=s.history?.[0];
+ if(!last||last.source!=='credit-correction')return v7PriorUndo();
+ const acc=s.accounts.find(a=>a.id===last.accountId);
+ const d=acc&&v5Cards().find(x=>x.id===acc.financeDebtId);
+ if(!d)return alert('تعذر إيجاد بطاقة التصحيح؛ لم تُمس البيانات.');
+ if(!confirm('التراجع عن آخر تصحيح لرصيد '+d.name+'؟'))return;
+ d.balanceCorrection=v5Currency(Number(d.balanceCorrection||0)-Number(last.delta||0));
+ if(Array.isArray(d.correctionLog)&&d.correctionLog.length)d.correctionLog.shift();
+ s.history.shift();save();
+};
+// Keep stable internal Visa IDs/names for SMS matching while permitting friendly display names.
+const v7Render=render;
+render=function(){
+ v7Render();
+ for(const d of v5Cards()){
+  const a=s.accounts.find(x=>x.financeDebtId===d.id&&v5Credit(x));
+  if(a&&d.accountLabel)a.name=d.accountLabel;
+  const row=a&&[...document.querySelectorAll('.v5-visa-account')].find(x=>x.dataset.credit===a.id);
+  if(row&&a){const title=row.querySelector('b');if(title)title.textContent='💳 '+a.name;}
+ }
+};
+window.editVisaConfig=function(id){
+ const d=v5Cards().find(x=>x.id===id);if(d)openAcc(v5CreditId(d));
+};
+// Give useful app context without a second credit-card input screen.
+document.querySelector('#tm h2').textContent='إضافة/لصق عملية — لجميع الحسابات والفيزا';
+document.querySelector('#tm .f label').textContent='ألصق الرسالة كما وصلتك: حساب بنكي أو فيزا ١ أو فيزا ٢';
+const v5Pick=document.createElement('div');v5Pick.id='v5PickModal';v5Pick.className='modal';
+v5Pick.innerHTML=`<div class="sheet"><h2>تحديد حساب الفيزا</h2><p class="visa-note" id="v5PickInfo" style="white-space:pre-line"></p><div class="f"><label>اختر البطاقة فقط (المبلغ من الرسالة)</label><select id="v5PickVisa" style="width:100%;padding:12px"></select></div><div class="row"><button class="pri" onclick="v5ConfirmPick()">تسجيل العملية</button><button class="sec" onclick="closeM('v5PickModal')">إلغاء</button></div><div class="msg" id="v5PickMsg"></div></div>`;
+document.body.appendChild(v5Pick);
+const v5Style=document.createElement('style');v5Style.textContent='.v5-visa-account{background:#f0f6ff;border-color:#b8c9df}.v5-visa-account .bal{color:#a34329}.v5-visa-account .pri{background:#173f77}.v5-visa-account .row button{font-size:13px}';document.head.appendChild(v5Style);
+
+ migrateFinanceV2();
+ ensureFlexibleVisaPayments();
+ render();
+ window.addEventListener('storage',e=>{if(e.key==='budget_finance_clean_v4' ||e.key==='finance_budget_links_v1'){render()}});
+})();
+</script>
+
+<script>
+// Read and restore the account manager's in-memory data, including credit cards and all historic events.
+window.addEventListener('message',(event)=>{
+ const d=event.data;if(d?.fcBridge!=='FinanceCenterV6'||!d.requestId)return;
+ const reply=(ok,value,error)=>event.source?.postMessage({fcBridge:'FinanceCenterV6',requestId:d.requestId,ok,value,error},'*');
+ try{
+  if(d.action==='snapshot'){
+   // Budget payments may update the shared bank record while this iframe is hidden.
+   // Treat the latest persisted bank state as authoritative, never overwrite it with an old screen copy.
+   const stored=localStorage.getItem(K);
+   const latest=stored?JSON.parse(stored):null;
+   if(latest&&Array.isArray(latest.accounts)&&Array.isArray(latest.history))s=latest;
+   else localStorage.setItem(K,JSON.stringify(s));
+   reply(true,{accounts:JSON.stringify(s)});
+  }else if(d.action==='restore'){
+   const raw=d.value?.accounts;if(!raw)throw Error('الحسابات غير موجودة');
+   const next=typeof raw==='string'?JSON.parse(raw):raw;
+   if(!Array.isArray(next.accounts)||!Array.isArray(next.history))throw Error('قائمة الحسابات أو سجل الحركات غير صالح');
+   s=next;localStorage.setItem(K,JSON.stringify(s));render();reply(true,{restored:true});
+  }
+ }catch(err){reply(false,null,err.message)}
+});
+</script><style>
+#recoveryPanel{background:white;border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 2px 10px #0001}#recoveryPanel input{width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:9px;font-size:16px}#recoveryPanel label{display:block;margin:9px 0;font-size:13px;color:#334155}#recoveryPanel .rpgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}#recoveryPanel .rpstat{padding:10px;background:#f1f5f9;border-radius:12px}#recoveryPanel .rpstat strong{display:block;font-size:20px}#recoveryPanel button{padding:10px;border:0;border-radius:9px;background:#164e63;color:white;margin:4px;cursor:pointer}#recoveryPanel .rpsim{background:#fff7e6;padding:10px;border-radius:12px}#recoveryPanel svg{width:100%;height:auto}#recoveryPanel .rphint{font-size:12px;color:#64748b}
+</style>
+<section id="recoveryPanel" dir="rtl"><h2>خطة التعافي المالي</h2><p class="rphint">تُقرأ أرصدة الفيزا مباشرة من صفحة الحسابات. وضع التجربة لا يغيّر أي حساب أو حركة.</p><div class="rpgrid"><div class="rpstat">دين Visa 1<strong id="rpVisa">—</strong></div><div class="rpstat">المتبقي لإعادة دراهم<strong id="rpDarahim">٥٠٬٠٠٠</strong></div></div><p><button type="button" id="rpMode">تشغيل المحاكاة</button><button type="button" id="rpReset">استعادة الخطة الأصلية</button></p><div id="rpSimulation" hidden class="rpsim">تجربة افتراضية — لن تحفظ أي تعديل في الحسابات</div><div class="rpgrid"><label>سداد الفيزا شهريًا<input type="number" id="rpPayment" min="0" step="100" value="5000"></label><label>مشتريات جديدة متوقعة شهريًا<input type="number" id="rpPurchases" min="0" step="100" value="0"></label><label>إعادة رأس مال دراهم بعد الفيزا<input type="number" id="rpReturn" min="0" step="100" value="5000"></label><label>المبلغ المطلوب إعادته<input type="number" id="rpTarget" min="0" step="100" value="50000"></label></div><p class="rphint">الاستثمار الجديد ٥٥٠ ريال شهريًا مستقل ولا يُخصم من مبلغ الإعادة. الحساب لا يتضمن فوائد أو رسومًا مستقبلية؛ يمكن إضافتها إلى المشتريات المتوقعة.</p><div class="rpgrid"><div class="rpstat">إغلاق الفيزا<strong id="rpVisaEnd">—</strong></div><div class="rpstat">اكتمال إعادة دراهم<strong id="rpFundEnd">—</strong></div></div><div class="rpgrid"><div class="rpstat">مشتريات Visa 1 المسجلة هذا الشهر<strong id="rpActualBuys">—</strong></div><div class="rpstat">سداد Visa 1 المسجل هذا الشهر<strong id="rpActualPays">—</strong></div></div><h3>المسار المتوقع للفيزا</h3><svg id="rpChart" viewBox="0 0 340 140" role="img" aria-label="منحنى رصيد الفيزا المتوقع"></svg><p class="rphint" id="rpNote"></p></section>
+<script>
+(function(){
+ const q=id=>document.getElementById(id), money=n=>Number(n).toLocaleString('ar-SA',{maximumFractionDigits:0})+' ر.س';
+ const defaults={payment:5000,purchases:0,monthlyReturn:5000,target:50000};
+ let scenario=false, draft={...defaults};
+ const fields={payment:'rpPayment',purchases:'rpPurchases',monthlyReturn:'rpReturn',target:'rpTarget'};
+ function realVisa(){try{const a=s.accounts.find(a=>a.kind==='credit'&&(a.last4==='0452'||a.name==='فيزا١'));return a?Math.max(0,-Number(a.balance||0)):0}catch(e){return 0}}
+ function monthLabel(n){const d=new Date();d.setDate(1);d.setMonth(d.getMonth()+n);return d.toLocaleDateString('ar-SA',{month:'long',year:'numeric',calendar:'gregory'})}
+ function actualActivity(){
+   let buys=0,pays=0;const now=new Date(),yr=now.getFullYear(),mo=now.getMonth();
+   try{
+     const rows=Array.isArray(s.history)?s.history:[];
+     const ids=s.accounts.filter(a=>a.kind==='credit'&&(a.last4==='0452'||a.name==='فيزا١')).map(a=>a.id);
+     const seen=new Set();
+     for(const h of rows){
+       if(!ids.includes(h.accountId)||h.source==='credit-correction')continue;
+       const d=new Date(h.ts);if(d.getFullYear()!==yr||d.getMonth()!==mo)continue;
+       const key=h.financeLogId||h.linkId||[h.ts,h.delta,h.type].join(':');if(seen.has(key))continue;seen.add(key);
+       const amount=Number(h.delta)||0;
+       if(amount<0&&/شراء/.test(h.type||''))buys+=-amount;
+       if(amount>0&&/سداد|حوالة واردة/.test(h.type||''))pays+=amount;
+     }
+   }catch(e){}
+   return {buys,pays};
+ }
+ function draw(){
+ const bal=realVisa();q('rpVisa').textContent=money(bal);const activity=actualActivity();q('rpActualBuys').textContent=money(activity.buys);q('rpActualPays').textContent=money(activity.pays);
+ const p=scenario?draft:defaults;const payment=+p.payment||0,buy=+p.purchases||0,ret=+p.monthlyReturn||0,target=+p.target||0;
+ const monthly=payment-buy;let n=bal===0?0:monthly>0?Math.ceil(bal/monthly):Infinity;
+ const fundMonths=target===0?0:ret>0?Math.ceil(target/ret):Infinity;
+ q('rpDarahim').textContent=money(target);
+ q('rpVisaEnd').textContent=Number.isFinite(n)?(n===0?'مغلق حاليًا':monthLabel(n)):'غير ممكن';
+ q('rpFundEnd').textContent=Number.isFinite(n+fundMonths)?(n+fundMonths===0?'مكتمل حاليًا':monthLabel(n+fundMonths)):'غير ممكن';
+ q('rpNote').textContent='الرصيد الحقيقي يتغير عند تسجيل شراء أو سداد في صفحة الحسابات. الحساب يفترض دفعات شهرية بدءًا من الشهر القادم.';
+ const pts=Array.from({length:13},(_,i)=>{let debt=Math.max(0,bal-i*monthly);return `${12+i*26},${115-100*(bal?Math.min(1,1-debt/bal):1)}`}).join(' ');
+ q('rpChart').innerHTML='<path d="M12 15V115H330" fill="none" stroke="#94a3b8"/><polyline points="'+pts+'" fill="none" stroke="#0f766e" stroke-width="3" stroke-linecap="round"/>';
+ }
+ function fill(p){Object.keys(fields).forEach(k=>q(fields[k]).value=p[k])}
+ q('rpMode').onclick=()=>{scenario=!scenario;q('rpSimulation').hidden=!scenario;q('rpMode').textContent=scenario?'الخروج من المحاكاة':'تشغيل المحاكاة';if(!scenario){draft={...defaults};fill(defaults)}draw()};
+ q('rpReset').onclick=()=>{draft={...defaults};fill(defaults);scenario=false;q('rpSimulation').hidden=true;q('rpMode').textContent='تشغيل المحاكاة';draw()};
+ Object.keys(fields).forEach(k=>q(fields[k]).addEventListener('input',()=>{if(!scenario){scenario=true;q('rpSimulation').hidden=false;q('rpMode').textContent='الخروج من المحاكاة'}draft[k]=Math.max(0,+q(fields[k]).value||0);draw()}));
+ // Read-only polling: redraw when original app changes an account, without altering its state.
+ let last='';setInterval(()=>{const v=JSON.stringify([realVisa(),actualActivity()]);if(v!==last){last=v;draw()}},1200);
+ draw();
+})();
+</script></body></html>
