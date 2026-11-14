@@ -47,3 +47,21 @@ main{width:min(1240px,100% - 26px);margin:-12px auto 32px;flex:1}.nav-shell{back
 .retirement-divider{background:#ecdfff;border-right:5px solid #895cbb;padding:8px 12px;border-radius:8px;font-size:13px;font-weight:850;color:#5b338e;margin:7px 0}
 .forecast-caveat{font-size:12px;color:#91692d;background:#fff9ec;border:1px solid #f1e0bd;border-radius:13px;padding:10px 14px;margin-top:10px}
 @media(max-width:920px){.forecast-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:540px){.forecast-card{padding:14px 11px}.forecast-metrics{gap:7px}.forecast-stat{padding:11px 9px}.forecast-stat strong{font-size:16px}.forecast-bar-head{font-size:11px}}
+
+/* Retirement & Darahim scenario charts — real source balances, distinct projections */
+.retire-panel{overflow:hidden}
+.retire-chart{display:flex;align-items:stretch;gap:9px;overflow-x:auto;min-height:270px;height:290px;padding:22px 10px 8px;border-radius:12px;background:repeating-linear-gradient(to top,#f7f8fc 0,#f7f8fc calc(25% - 1px),#e5e9f4 25%);border:1px solid #e8ebf3;direction:rtl;scroll-snap-type:x proximity}
+.retire-column-group{min-width:67px;flex:1 0 67px;max-width:130px;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;scroll-snap-align:start}
+.retire-columns{display:flex;flex:1;align-items:flex-end;justify-content:center;gap:3px;width:100%;padding:0 5px;min-height:120px}
+.retire-rect{width:100%;max-width:35px;min-width:4px;position:relative;border-radius:4px 4px 0 0;box-shadow:inset 0 -3px 3px #0000000b;transition:height .2s;cursor:help}
+.retire-rect.is-negative{opacity:.78;border-top:3px solid #8d2440}
+.retire-axis-label{height:32px;display:grid;place-items:center;text-align:center;font-size:11px;font-weight:800;color:#52627d;white-space:nowrap}
+.retire-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:7px 0 12px;font-size:11px;color:#596b88}
+.retire-legend span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.retire-legend i{display:inline-block;width:11px;height:11px;border-radius:3px}
+.retire-panel .hint{font-size:12px}
+.retire-notes{display:grid;gap:5px}
+.retire-notes p{padding:9px 12px;border-radius:9px;border-right:3px solid #e7a035;background:#fff9ec;color:#7f551a;font-size:12px;margin:0}
+.retire-panel .form-grid{margin:10px 0 15px}
+.retire-panel h3,.panel h3{font-size:14px;margin:17px 0 10px;color:#4a5c79}
+@media(max-width:650px){.retire-chart{height:245px;min-height:245px;gap:4px;padding:17px 7px 7px}.retire-column-group{min-width:58px;flex-basis:58px}.retire-columns{gap:2px;padding:0 2px}.retire-rect{min-width:3px}}
