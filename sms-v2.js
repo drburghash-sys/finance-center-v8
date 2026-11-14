@@ -69,6 +69,7 @@ function parse(raw,data){
  const bill=/سداد\s*فاتورة|مدفوعات\s*وزارة\s*الداخلية/i.test(t);
  const profit=/أرباح\s*دراهم|توزيع\s*أرباح|ربح\s*محفظة/i.test(t);
  let kind="unclassified";
+ const rule=(data?.learnedRules||[]).find(r=>r.key&&t.toLowerCase().includes(String(r.key).toLowerCase()));
  if(rejected)kind="rejected";
  else if(d&&(isPayment||incoming&&!isPurchase))kind="repayment";
  else if(d&&(isPurchase||hasCredit&&!isPayment))kind="charge";
@@ -77,12 +78,17 @@ function parse(raw,data){
  else if(incoming)kind="income";
  else if(bill||isPurchase||withdrawal)kind="expense";
  else if(outgoing)kind="transfer";
+ if(kind==="unclassified"&&rule){kind=({incoming:"income",outgoing:"transfer",purchase:"expense",withdrawal:"expense",bill:"expense",moi:"expense",transfer:"transfer"})[rule.type]||kind;}
  const selected=new Set();
  for(const id of ids){for(const a of byDigit(all,id,"card"))selected.add(a.id)}
  const isBankAccount=x=>x&&x.role==="bank"||x?.role==="reserve";
  let from="",to="";
  if(debitId){const c=byDigit(all,debitId,"account");if(c.length===1)from=c[0].id}
  if(creditId){const c=byDigit(all,creditId,"account");if(c.length===1)to=c[0].id}
+ if(rule?.accountMode==="fixed"&&rule.accountId&&all.some(x=>x.id===rule.accountId)){
+   if(["expense","transfer","repayment"].includes(kind))from=rule.accountId;
+   else if(["income","profit"].includes(kind))to=rule.accountId;
+ }
  if(kind==="expense"||kind==="charge"){
   if(!from){const eligible=[...selected].map(id=>all.find(x=>x.id===id)).filter(isBankAccount);if(eligible.length===1)from=eligible[0].id}
  }
@@ -102,7 +108,7 @@ function parse(raw,data){
  if(!merchant)merchant=(t.match(/(?:لدى|at)\s*[:：]?\s*([a-zA-Z\u0600-\u06FF0-9 \-]{3,35})/i)||[])[1]||"";
  merchant=merchant.trim().slice(0,70);
  const category=kind==="charge"?"مشتريات فيزا":kind==="expense"?merchant||"مشتريات بنكية":kind==="repayment"?"سداد فيزا":kind==="income"?"حوالة واردة":kind==="profit"?"أرباح دراهم":kind==="transfer"?"تحويل بين الحسابات":"غير مصنف";
- return{raw:String(raw||""),normalized:t,hash:hash(t),date:parseDate(raw),kind,amount:a,from,to,debtId:d?.id||"",cardDigits:ids,accountDigits:[debitId,creditId].filter(Boolean),category,principal:0,confidence:kind!=="unclassified"&&!!a?(kind==="charge"||kind==="repayment"?!!d:true):false,reason:rejected?"العملية مرفوضة؛ لا تُخصم من الأرصدة":kind==="unclassified"?"تعذر تحديد نوع العملية. اختر نوعها وحسابها قبل الحفظ":!a?"لم أستطع تحديد المبلغ":kind==="transfer"&&(!from||!to)?"اختر طرفي التحويل قبل التسجيل":kind==="repayment"&&!from?"حدّد هل خصم السداد البنكي مسجل مسبقًا":"راجع التفاصيل قبل التسجيل"};
+ return{raw:String(raw||""),normalized:t,hash:hash(t),learnedRule:rule?.key||"",date:parseDate(raw),kind,amount:a,from,to,debtId:d?.id||"",cardDigits:ids,accountDigits:[debitId,creditId].filter(Boolean),category,principal:0,confidence:kind!=="unclassified"&&!!a?(kind==="charge"||kind==="repayment"?!!d:true):false,reason:rejected?"العملية مرفوضة؛ لا تُخصم من الأرصدة":kind==="unclassified"?"تعذر تحديد نوع العملية. اختر نوعها وحسابها قبل الحفظ":!a?"لم أستطع تحديد المبلغ":kind==="transfer"&&(!from||!to)?"اختر طرفي التحويل قبل التسجيل":kind==="repayment"&&!from?"حدّد هل خصم السداد البنكي مسجل مسبقًا":"راجع التفاصيل قبل التسجيل"};
 }
 root.BankSMS={parse,normalize:tidy,hash,amount,cards};
 })(window);
