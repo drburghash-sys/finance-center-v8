@@ -261,15 +261,41 @@ function contentAccounts(){
  }
  return stats([box("الرصيد النقدي الكلي",netCash(),"يشمل حساب الالتزامات مرة واحدة","blue"),box("حساب الالتزامات",reserveCash(),"جزء من الإجمالي النقدي","violet"),box("دراهم والاستثمارات",invCash(),"أصول منفصلة عن النقد البنكي","amber")])+contentAccountFunding();
 }
+// A month-specific planning overlay protects the imported V8 data from destructive edits.
+function incomePlanForMonth(m){
+ const legacy=data.legacy?.budgetMonths||{},overrides=data.budgetIncomeOverrides||{};
+ const original=legacy[m]||null, own=overrides[m]||null;
+ const months=[...new Set([...Object.keys(legacy),...Object.keys(overrides)])].filter(k=>/^\d{4}-\d{2}$/.test(k)&&k<=m).sort();
+ const source=months.slice().reverse().find(k=>Number.isFinite(Number(overrides[k]?.salary))||Number.isFinite(Number(legacy[k]?.salary)))||null;
+ const sourceSalary=source?(overrides[source]?.salary??legacy[source]?.salary):data.legacy?.future?.settings?.salary;
+ const salary=Math.max(0,Number(own?.salary??original?.salary??sourceSalary)||0);
+ const rawLines=Array.isArray(own?.lines)?own.lines:Array.isArray(original?.incomeLines)?original.incomeLines:[];
+ const lines=rawLines.map((x,i)=>({id:String(x.id||'legacy-income-'+i),name:String(x.name||'دخل إضافي'),amount:Math.max(0,Number(x.amount)||0)}));
+ const extras=lines.reduce((a,x)=>a+x.amount,0);
+ return {salary,extras,total:salary+extras,lines,source,assumedFromPrevious:!!source&&source!==m&&!own&&!original,missing:!original&&!own&&!source};
+}
+function ensureIncomePlan(m){
+ if(!data.budgetIncomeOverrides)data.budgetIncomeOverrides={};
+ if(!data.budgetIncomeOverrides[m]){
+  const existing=incomePlanForMonth(m);
+  data.budgetIncomeOverrides[m]={salary:existing.salary,lines:existing.lines.map(x=>({...x}))};
+ }
+ return data.budgetIncomeOverrides[m];
+}
 function budgetIncomeForMonth(m){
- const byMonth=data.legacy?.budgetMonths||{};
- const known=Object.keys(byMonth).filter(k=>/^\d{4}-\d{2}$/.test(k)&&k<=m).sort();
- const source=byMonth[m]?m:(known.length?known[known.length-1]:null);
- const b=source?byMonth[source]:null;
- // Never count the bank deposit on top of the salary estimate: this is a *plan*, not actual cash received.
- const salary=b?Math.max(0,Number(b.salary)||0):Math.max(0,Number(data.legacy?.future?.settings?.salary)||0);
- const extras=Array.isArray(b?.incomeLines)?b.incomeLines.reduce((total,x)=>total+Math.max(0,Number(x.amount)||0),0):0;
- return {salary,extras,total:salary+extras,source,assumedFromPrevious:!!source&&source!==m,missing:!b&&!salary};
+ const v=incomePlanForMonth(m);
+ return {salary:v.salary,extras:v.extras,total:v.total,source:v.source,assumedFromPrevious:v.assumedFromPrevious,missing:v.missing};
+}
+function incomeSourcesPanel(m){
+ const v=incomePlanForMonth(m);
+ const salaryRow='<div class="list-row"><div><b>الراتب الشهري المخطط</b><small>'+(v.assumedFromPrevious?'اعتماد راتب آخر شهر محفوظ — يمكن تعديله لهذا الشهر':'خاص بميزانية '+esc(m))+'</small></div><div class="right"><b>'+money(v.salary)+'</b>'+button("تعديل الراتب","editSalaryPlan",null,"outline")+'</div></div>';
+ const lines=v.lines.map(x=>'<div class="list-row"><div><b>'+esc(x.name)+'</b><small>دخل إضافي مخطط في '+esc(m)+'؛ لا يُضاف تلقائيًا إلى البنك</small></div><div class="right"><b>'+money(x.amount)+'</b>'+
+ button("تعديل","editIncomePlan",x.id,"outline")+button("حذف","deleteIncomePlan",x.id,"danger")+'</div></div>').join('');
+ const action=button("إضافة دخل آخر","newIncomePlan",null,"primary");
+ return panel('مصادر الدخل المخطط لشهر '+m,
+ '<div class="compact-list">'+salaryRow+lines+'</div>'+
+ '<div class="income-plan-summary"><strong>الراتب: '+money(v.salary)+'</strong><strong>الإضافي: '+money(v.extras)+'</strong><strong>الإجمالي: '+money(v.total)+'</strong></div>'+
+ '<p class="body-note">مثال: سجل أرباح دراهم مرة واحدة هنا كمصدر دخل متوقع، ثم وزع المبلغ على بند الزوجة وبند حساب الالتزامات من بنود الميزانية أدناه. حساب الالتزامات ادخار وليس مصروفًا؛ لا تسجل الأرباح مرتين إذا كانت مستوردة مسبقًا.</p>',action);
 }
 function contentBudget(){
  if(sub==="history")return contentBudgetHistory();
@@ -295,8 +321,8 @@ function contentBudget(){
  const paidCount=items.filter(x=>x.paid).length;
  const budgetRows=items.map(x=>'<div class="budget-line '+(x.paid?'confirmed':'pending')+'"><div class="budget-item-main"><b>'+esc(x.name)+'</b><small>'+esc(x.category||x.type||"مصروف مخطط")+'</small><small>البنك المخصص: '+(linkedAccount(x)?esc(bankGroup(linkedAccount(x))+" ← "+linkedAccount(x).name):"غير محدد — اضغط تعديل")+'</small><strong>'+money(x.amount)+'</strong></div><div class="budget-item-state">'+pill(x.paid?'✓ تم تأكيد السداد':'لم يُؤكد',x.paid?'done':'warn')+
  button(x.paid?'إلغاء التأكيد':'تأكيد السداد','toggleBudgetPaid',x.id,x.paid?'outline':'primary')+actions("Budget",x.id)+'</div></div>').join('');
- return varianceBox+metrics+stats([box("بنود مؤكدة",paidCount,"من "+items.length+" بندًا","blue"),box("قيمة البنود المؤكدة",total(items.filter(x=>x.paid)),"حالة متابعة من الميزانية فقط","violet")])+
- (data.legacy?.budgetMonths?.[period]?panel("الدخل المخطط حسب النسخة الأصلية",entryList([{title:"الراتب في الميزانية",value:money(data.legacy.budgetMonths[period].salary)},...(data.legacy.budgetMonths[period].incomeLines||[]).map(x=>({title:x.name,value:money(x.amount)}))])):"")+panel("بنود ميزانية "+period,(items.length?'<div class="budget-list">'+budgetRows+"</div>":blank("لم تُنشأ ميزانية لهذا الشهر")),button("إضافة بند","newBudget",null,"primary")+button("نسخ بنود الشهر السابق","copyPrevBudget",null,"outline"))+
+ return varianceBox+incomeSourcesPanel(period)+metrics+stats([box("بنود مؤكدة",paidCount,"من "+items.length+" بندًا","blue"),box("قيمة البنود المؤكدة",total(items.filter(x=>x.paid)),"حالة متابعة من الميزانية فقط","violet")])+
+ panel("بنود ميزانية "+period,(items.length?'<div class="budget-list">'+budgetRows+"</div>":blank("لم تُنشأ ميزانية لهذا الشهر")),button("إضافة بند","newBudget",null,"primary")+button("نسخ بنود الشهر السابق","copyPrevBudget",null,"outline"))+
  '<p class="body-note">لون «تم تأكيد السداد» يعكس متابعتك في الميزانية ولا يُخصم مرة أخرى من البنك. لتعديل الرصيد الفعلي سجل عملية بنكية من الحسابات أو عن طريق لصق الرسالة.</p>'+
  panel("التنفيذ الفعلي",entryList([{title:"مصروفات فعلية",value:money(expenseM())},{title:"سداد ديون من البنك",value:money(paidM())},{title:"ادخار محوّل بالفعل",value:money(total(movements().filter(m=>m.kind==="transfer"&&acc(m.to)?.role==="reserve")))}]));
 }
@@ -440,6 +466,8 @@ function editor(kind,id){
  modalType=kind;editingId=id||"";
  let title="",inner="",date=field("تاريخ العملية","date",now(),"date"),amount=field("المبلغ بالريال","amount","","number",'required');
  if(kind==="account"){title="إضافة حساب حقيقي";inner=field("اسم الحساب","name","","text","required")+field("اسم البنك أو الجهة","bank")+field("آخر أربعة أرقام (اختياري)","last4")+field("بطاقات مدى المرتبطة (آخر ٤ أرقام، افصل بفاصلة)","cardsText")+field("الرصيد الافتتاحي قبل الحركات","opening","0","number","required")+select("نوع الحساب","role",[["bank","حساب بنكي"],["reserve","حساب الالتزامات (ادخار)"],["investment","محفظة استثمارية"]],"bank");}
+ else if(kind==="budgetSalary"){title="تعديل الراتب المخطط لشهر "+period;inner=field("الشهر","month",period,"month","readonly")+field("الراتب المخطط","salary",incomePlanForMonth(period).salary,"number","required");}
+ else if(kind==="budgetIncome"){title=editingId?"تعديل دخل إضافي":"إضافة دخل آخر";inner=field("الشهر","month",period,"month","readonly")+field("مصدر الدخل (مثال: أرباح دراهم)","name","","text","required")+field("المبلغ المتوقع لهذا الشهر","amount","","number","required");}
  else if(kind==="budget"){title="إضافة بند ميزانية";inner=field("الشهر","month",period,"month","required")+field("اسم البند","name","","text","required")+field("المخصص للشهر","amount","","number","required")+select("نوع التخصيص","type",[["expense","مصروف مخطط"],["debt","قسط دين مخطط"],["saving","تحويل ادخار للالتزامات"],["investment","استثمار مخطط"]],"expense")+select("البنك / الحساب المخصص لتنفيذ هذا البند","bankAccountId",data.accounts.filter(a=>a.role==="bank"||a.role==="reserve"||a.role==="investment").map(a=>[a.id,bankGroup(a)+" — "+a.name]),"","غير محدد (يرجى الاختيار)");}
  else if(kind==="commitment"){title="تسجيل موعد التزام";inner=field("الالتزام (رسوم مدرسة / سيارة / صيانة)","name","","text","required")+field("شهر أول استحقاق","firstMonth",period,"month","required")+amount+field("عدد الدفعات","count","1","number","required")+field("الفاصل بين الدفعات بالأشهر","interval","1","number","required");}
  else if(kind==="debt"){title="إضافة رصيد دين حقيقي";inner=field("اسم الدين","name","","text","required")+field("الرصيد الحالي من كشف البنك","opening","","number","required")+field("تاريخ الرصيد","asOf",now(),"date")+field("آخر ٤ أرقام لبطاقة الفيزا","cardLast4")+select("النوع","kind",[["loan","قرض بنكي"],["credit","بطاقة فيزا"]],"loan");}
@@ -467,7 +495,7 @@ function editor(kind,id){
  $("modalTitle").textContent=editingId?"تعديل: "+title:title;
  $("editorForm").innerHTML='<div class="form-grid">'+inner+'</div><div class="modal-footer"><button type="button" class="button outline" data-action="close">إلغاء</button><button class="button primary" type="submit">حفظ</button></div>';
  if(editingId){
-  const source=kind==="account"?acc(editingId):kind==="budget"?data.budget.find(x=>x.id===editingId):kind==="commitment"?data.commitments.find(x=>x.id===editingId):kind==="debt"?debt(editingId):kind==="project"?project(editingId):data.moves.find(x=>x.id===editingId);
+  const source=kind==="budgetIncome"?incomePlanForMonth(period).lines.find(x=>x.id===editingId):kind==="account"?acc(editingId):kind==="budget"?data.budget.find(x=>x.id===editingId):kind==="commitment"?data.commitments.find(x=>x.id===editingId):kind==="debt"?debt(editingId):kind==="project"?project(editingId):data.moves.find(x=>x.id===editingId);
   if(source)$("editorForm").querySelectorAll("[name]").forEach(el=>{if(el.name==="cardsText")el.value=(source.cards||[]).join(", ");else if(el.name==="bankAccountId"&&kind==="budget")el.value=linkedAccount(source)?.id||"";else if(source[el.name]!=null)el.value=source[el.name]});
  }
  $("dialog").hidden=false;$("dialog").setAttribute("aria-hidden","false");
@@ -479,7 +507,25 @@ function storeRecord(name,record){
 }
 function saveForm(form){
  const v=Object.fromEntries(new FormData(form).entries()),kind=modalType;
- if(kind==="account"){if(!v.name.trim())throw Error("أدخل اسم الحساب");storeRecord("accounts",{id:uid(),name:v.name.trim(),bank:v.bank||"",last4:v.last4||"",role:v.role,opening:Number(v.opening)||0,cards:String(v.cardsText||"").split(/[،,\s;]+/).map(x=>x.trim()).filter(x=>/^\d{4}$/.test(x))});}
+ if(kind==="budgetSalary"){
+  if(!/^d{4}-d{2}$/.test(v.month)||!Number.isFinite(Number(v.salary))||Number(v.salary)<0)throw Error("أدخل راتبًا صحيحًا للشهر");
+  ensureIncomePlan(v.month).salary=Number(v.salary);period=v.month;
+ }
+ else if(kind==="budgetIncome"){
+  const name=String(v.name||"").trim(),amount=Number(v.amount),m=String(v.month||"");
+  if(!/^d{4}-d{2}$/.test(m)||!name||!Number.isFinite(amount)||amount<=0)throw Error("أدخل مصدر الدخل والمبلغ الصحيح للشهر");
+  const bucket=ensureIncomePlan(m);
+  const normalize=x=>String(x||"").replace(/s+/g,"").toLowerCase();
+  const isDarahim=x=>/دراهم|darahim/i.test(x||"");
+  const same=bucket.lines.some(x=>x.id!==editingId&&(normalize(x.name)===normalize(name)||(isDarahim(x.name)&&isDarahim(name))));
+  if(same)throw Error("هذا الدخل مسجل بالفعل لهذا الشهر. استخدم زر تعديل على السطر الموجود بدل إضافته مرتين.");
+  const idx=editingId?bucket.lines.findIndex(x=>x.id===editingId):-1;
+  if(editingId&&idx<0)throw Error("لم أجد الدخل المراد تعديله في هذا الشهر");
+  if(idx>=0)bucket.lines[idx]={...bucket.lines[idx],name,amount};
+  else bucket.lines.push({id:uid(),name,amount});
+  period=m;
+ }
+ else if(kind==="account"){if(!v.name.trim())throw Error("أدخل اسم الحساب");storeRecord("accounts",{id:uid(),name:v.name.trim(),bank:v.bank||"",last4:v.last4||"",role:v.role,opening:Number(v.opening)||0,cards:String(v.cardsText||"").split(/[،,\s;]+/).map(x=>x.trim()).filter(x=>/^\d{4}$/.test(x))});}
  else if(kind==="budget"){
    if(!v.name.trim()||!v.month)throw Error("أكمل اسم البند والشهر");
    const old=data.budget.find(x=>x.id===editingId);
@@ -650,6 +696,17 @@ $("content").addEventListener("click",e=>{
  if(action==="toggleCommitment"){
   const c=data.commitments.find(x=>x.id===target.dataset.id);
   if(c){c.active=c.active===false?true:false;keep()}
+  return;
+ }
+ if(action==="newIncomePlan"){editor("budgetIncome");return;}
+ if(action==="editIncomePlan"){editor("budgetIncome",target.dataset.id);return;}
+ if(action==="editSalaryPlan"){editor("budgetSalary");return;}
+ if(action==="deleteIncomePlan"){
+  const bucket=ensureIncomePlan(period),item=bucket.lines.find(x=>x.id===target.dataset.id);
+  if(!item){alert("لم أجد مصدر الدخل");return;}
+  if(confirm("حذف دخل "+item.name+" من خطة "+period+"؟ لن تتغير الحسابات البنكية ولا سجل النسخة الأصلية.")){
+   bucket.lines=bucket.lines.filter(x=>x.id!==item.id);keep();
+  }
   return;
  }
  if(action.startsWith("edit")){
