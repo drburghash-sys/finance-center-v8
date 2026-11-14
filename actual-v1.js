@@ -269,7 +269,7 @@ function contentBudget(){
  const metrics=stats([box("بنود مخططة للشهر",planned,"تتضمن تحويل الادخار إن وجد","blue"),box("منها ادخار مخطط",saved,"ليس مصروفًا فعليًا","violet"),box("المصروف الفعلي",expenseM(),"من الحركات المسجلة","coral")]);
  if(sub==="categories")return metrics+panel("المصروفات المنفذة حسب البند",bars(Object.entries(categories).sort((a,b)=>b[1]-a[1]),"تم احتساب الصرف من عمليات فعلية فقط"));
  const paidCount=items.filter(x=>x.paid).length;
- const budgetRows=items.map(x=>'<div class="budget-line '+(x.paid?'confirmed':'pending')+'"><div class="budget-item-main"><b>'+esc(x.name)+'</b><small>'+esc(x.category||x.type||"مصروف مخطط")+'</small><strong>'+money(x.amount)+'</strong></div><div class="budget-item-state">'+pill(x.paid?'✓ تم تأكيد السداد':'لم يُؤكد',x.paid?'done':'warn')+
+ const budgetRows=items.map(x=>'<div class="budget-line '+(x.paid?'confirmed':'pending')+'"><div class="budget-item-main"><b>'+esc(x.name)+'</b><small>'+esc(x.category||x.type||"مصروف مخطط")+'</small><small>البنك المخصص: '+(linkedAccount(x)?esc(bankGroup(linkedAccount(x))+" ← "+linkedAccount(x).name):"غير محدد — اضغط تعديل")+'</small><strong>'+money(x.amount)+'</strong></div><div class="budget-item-state">'+pill(x.paid?'✓ تم تأكيد السداد':'لم يُؤكد',x.paid?'done':'warn')+
  button(x.paid?'إلغاء التأكيد':'تأكيد السداد','toggleBudgetPaid',x.id,x.paid?'outline':'primary')+actions("Budget",x.id)+'</div></div>').join('');
  return metrics+stats([box("بنود مؤكدة",paidCount,"من "+items.length+" بندًا","blue"),box("قيمة البنود المؤكدة",total(items.filter(x=>x.paid)),"حالة متابعة من الميزانية فقط","violet")])+
  (data.legacy?.budgetMonths?.[period]?panel("الدخل المخطط حسب النسخة الأصلية",entryList([{title:"الراتب في الميزانية",value:money(data.legacy.budgetMonths[period].salary)},...(data.legacy.budgetMonths[period].incomeLines||[]).map(x=>({title:x.name,value:money(x.amount)}))])):"")+panel("بنود ميزانية "+period,(items.length?'<div class="budget-list">'+budgetRows+"</div>":blank("لم تُنشأ ميزانية لهذا الشهر")),button("إضافة بند","newBudget",null,"primary")+button("نسخ بنود الشهر السابق","copyPrevBudget",null,"outline"))+
@@ -416,7 +416,7 @@ function editor(kind,id){
  modalType=kind;editingId=id||"";
  let title="",inner="",date=field("تاريخ العملية","date",now(),"date"),amount=field("المبلغ بالريال","amount","","number",'required');
  if(kind==="account"){title="إضافة حساب حقيقي";inner=field("اسم الحساب","name","","text","required")+field("اسم البنك أو الجهة","bank")+field("آخر أربعة أرقام (اختياري)","last4")+field("بطاقات مدى المرتبطة (آخر ٤ أرقام، افصل بفاصلة)","cardsText")+field("الرصيد الافتتاحي قبل الحركات","opening","0","number","required")+select("نوع الحساب","role",[["bank","حساب بنكي"],["reserve","حساب الالتزامات (ادخار)"],["investment","محفظة استثمارية"]],"bank");}
- else if(kind==="budget"){title="إضافة بند ميزانية";inner=field("الشهر","month",period,"month","required")+field("اسم البند","name","","text","required")+field("المخصص للشهر","amount","","number","required")+select("نوع التخصيص","type",[["expense","مصروف مخطط"],["debt","قسط دين مخطط"],["saving","تحويل ادخار للالتزامات"]],"expense");}
+ else if(kind==="budget"){title="إضافة بند ميزانية";inner=field("الشهر","month",period,"month","required")+field("اسم البند","name","","text","required")+field("المخصص للشهر","amount","","number","required")+select("نوع التخصيص","type",[["expense","مصروف مخطط"],["debt","قسط دين مخطط"],["saving","تحويل ادخار للالتزامات"],["investment","استثمار مخطط"]],"expense")+select("البنك / الحساب المخصص لتنفيذ هذا البند","bankAccountId",data.accounts.filter(a=>a.role==="bank"||a.role==="reserve"||a.role==="investment").map(a=>[a.id,bankGroup(a)+" — "+a.name]),"","غير محدد (يرجى الاختيار)");}
  else if(kind==="commitment"){title="تسجيل موعد التزام";inner=field("الالتزام (رسوم مدرسة / سيارة / صيانة)","name","","text","required")+field("شهر أول استحقاق","firstMonth",period,"month","required")+amount+field("عدد الدفعات","count","1","number","required")+field("الفاصل بين الدفعات بالأشهر","interval","1","number","required");}
  else if(kind==="debt"){title="إضافة رصيد دين حقيقي";inner=field("اسم الدين","name","","text","required")+field("الرصيد الحالي من كشف البنك","opening","","number","required")+field("تاريخ الرصيد","asOf",now(),"date")+field("آخر ٤ أرقام لبطاقة الفيزا","cardLast4")+select("النوع","kind",[["loan","قرض بنكي"],["credit","بطاقة فيزا"]],"loan");}
  else if(kind==="project"){title="إضافة مشروع";inner=field("اسم المشروع","name","","text","required")+field("وصف اختياري","description");}
@@ -444,7 +444,7 @@ function editor(kind,id){
  $("editorForm").innerHTML='<div class="form-grid">'+inner+'</div><div class="modal-footer"><button type="button" class="button outline" data-action="close">إلغاء</button><button class="button primary" type="submit">حفظ</button></div>';
  if(editingId){
   const source=kind==="account"?acc(editingId):kind==="budget"?data.budget.find(x=>x.id===editingId):kind==="commitment"?data.commitments.find(x=>x.id===editingId):kind==="debt"?debt(editingId):kind==="project"?project(editingId):data.moves.find(x=>x.id===editingId);
-  if(source)$("editorForm").querySelectorAll("[name]").forEach(el=>{if(el.name==="cardsText")el.value=(source.cards||[]).join(", ");else if(source[el.name]!=null)el.value=source[el.name]});
+  if(source)$("editorForm").querySelectorAll("[name]").forEach(el=>{if(el.name==="cardsText")el.value=(source.cards||[]).join(", ");else if(el.name==="bankAccountId"&&kind==="budget")el.value=linkedAccount(source)?.id||"";else if(source[el.name]!=null)el.value=source[el.name]});
  }
  $("dialog").hidden=false;$("dialog").setAttribute("aria-hidden","false");
 }
@@ -456,7 +456,15 @@ function storeRecord(name,record){
 function saveForm(form){
  const v=Object.fromEntries(new FormData(form).entries()),kind=modalType;
  if(kind==="account"){if(!v.name.trim())throw Error("أدخل اسم الحساب");storeRecord("accounts",{id:uid(),name:v.name.trim(),bank:v.bank||"",last4:v.last4||"",role:v.role,opening:Number(v.opening)||0,cards:String(v.cardsText||"").split(/[،,\s;]+/).map(x=>x.trim()).filter(x=>/^\d{4}$/.test(x))});}
- else if(kind==="budget"){if(!v.name.trim()||!v.month)throw Error("أكمل اسم البند والشهر");storeRecord("budget",{id:uid(),month:v.month,name:v.name.trim(),amount:num(v.amount),type:v.type});period=v.month;}
+ else if(kind==="budget"){
+   if(!v.name.trim()||!v.month)throw Error("أكمل اسم البند والشهر");
+   const old=data.budget.find(x=>x.id===editingId);
+   const amount=num(v.amount),bankAccountId=v.bankAccountId||"";
+   if(bankAccountId&&!data.accounts.some(a=>a.id===bankAccountId))throw Error("اختر حسابًا موجودًا");
+   const changed=!!old&&(old.amount!==amount||old.name!==v.name.trim()||old.month!==v.month||linkedAccount(old)?.id!==bankAccountId);
+   storeRecord("budget",{id:uid(),month:v.month,name:v.name.trim(),amount,type:v.type,bankAccountId,paid:old?(changed?false:!!old.paid):false});
+   period=v.month;
+ }
  else if(kind==="commitment"){if(!v.name.trim()||!v.firstMonth)throw Error("أكمل موعد الاستحقاق");storeRecord("commitments",{id:uid(),name:v.name.trim(),firstMonth:v.firstMonth,amount:num(v.amount),count:Math.min(240,Math.max(1,Number(v.count)||1)),interval:Math.min(120,Math.max(1,Number(v.interval)||1)),active:editingId?(data.commitments.find(x=>x.id===editingId)?.active!==false):true});}
  else if(kind==="debt"){if(!v.name.trim())throw Error("أدخل اسم الدين");storeRecord("debts",{id:uid(),name:v.name.trim(),opening:num(v.opening),kind:v.kind,asOf:v.asOf||now(),cardLast4:String(v.cardLast4||"").replace(/\D/g,"").slice(-4),source:"manual"});}
  else if(kind==="project"){if(!v.name.trim())throw Error("أدخل اسم المشروع");storeRecord("projects",{id:uid(),name:v.name.trim(),description:v.description||""});}
