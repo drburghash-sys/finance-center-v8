@@ -122,7 +122,7 @@ function contentObligations(){
  const paid=data.moves.filter(x=>x.kind==="expense"&&x.commitmentKey).sort((a,b)=>b.date.localeCompare(a.date));
  return panel("مدفوعات الالتزامات الفعلية",entryList(paid.map(m=>({title:m.category||"دفعة التزام",subtitle:m.date+" • "+moveAccounts(m),value:money(m.amount),actions:actions("Move",m.id)})),"لم يُدفع أي استحقاق مرتبط بعد"),button("تسجيل دفع حقيقي","newExpense",null,"primary"));
  }
- const due=dueItems().filter(x=>x.rest>0).slice(0,50);
+ const due=dueItems().filter(x=>x.rest>0&&x.date>=period).slice(0,50);
  const near=due.filter(x=>x.date<=addMonths(period,12)),amount=total(near,x=>x.rest);
  return stats([box("رصيد ادخار متاح اليوم",reserveCash(),"يمكن أن يستعمل للمدارس والسيارة والصيانة","violet"),box("استحقاقات ١٢ شهرًا",amount,"مواعيد مخططة، لم تُدفع بعد","amber")])+
  panel("الاستحقاقات المسجلة",entryList(due.slice(0,25).map(x=>({title:x.name,subtitle:"استحقاق "+x.date+" • المدفوع فعليًا "+money(x.paid),value:money(x.rest),tag:x.date<month()?"متأخر":x.date===month()?"هذا الشهر":"مخطط",tagType:x.date<month()?"warn":""})),"لا توجد استحقاقات مفتوحة"),button("إضافة التزام","newCommitment",null,"primary"))+
@@ -181,6 +181,7 @@ function contentData(){
  if(sub==="about")return panel("كيف نحسب المال؟",'<div class="rules"><p><b>١. الرصيد الحقيقي:</b> الرصيد الابتدائي المدخل + الوارد المثبت − الصادر المثبت.</p><p><b>٢. حساب الالتزامات:</b> نوع من حساباتك البنكية، يظهر ضمن النقد الكلي مرة واحدة؛ التحويل إليه ليس مصروفًا، والصرف منه مصروف واحد.</p><p><b>٣. الميزانية:</b> أرقام مخططة للمقارنة؛ لا تقلل الحسابات البنكية بمجرد إدخالها.</p><p><b>٤. الرسوم والقروض:</b> مواعيد أو أرصدة مرجعية حتى تُسجّل حركة دفع فعلية. سداد القرض يُخفض رصيد البنك، ويُنقص أصل الدين بالقيمة التي تؤكدها.</p><p><b>٥. المشاريع ودراهم:</b> الدخل والربح المعروضان فعليان ومدخلان، بلا نسبة عائد افتراضية.</p></div>');
  return panel("ملفاتك والنسخ الاحتياطية",'<p class="body-note">هذا إصدار جديد مستقل عن واجهة V8 السابقة، وبمخزن بيانات جديد. لا تُحذف البيانات القديمة تلقائيًا من المتصفح. ملف «المستقبل المالي» يُستورد كمواعيد وديون مرجعية، ولا يحوّل أهدافك إلى مصاريف مدفوعة.</p><div class="buttons">'+
  button("تصدير جميع بيانات هذا المركز","export",null,"primary")+
+ button("استيراد V8 المحفوظ على هذا الجهاز","importLocalV8",null,"outline")+
  '<label class="button outline file-button">استيراد ملف JSON<input id="importFile" type="file" accept=".json,application/json"></label>'+
  button("مسح بيانات المركز الجديد فقط","reset",null,"danger")+'</div><p class="hint">يمكن استيراد ملف خطة المستقبل المرفق، أو نسخة شاملة من V8 للحسابات والميزانية. لا تُرفع ملفاتك إلى GitHub.</p>');
 }
@@ -366,6 +367,17 @@ $("content").addEventListener("click",e=>{
   return;
  }
  if(action==="export"){download();return;}
+ if(action==="importLocalV8"){
+  try{
+   const oldAccounts=localStorage.getItem("bank_manager_v11_seeded_exact");
+   const oldBudget=localStorage.getItem("budget_finance_clean_v4");
+   if(!oldAccounts||!oldBudget)throw Error("لم أجد نسخة V8 القديمة محفوظة على هذا الجهاز. استخدم استيراد ملف JSON بدلًا من ذلك.");
+   if(!confirm("سأستورد أرصدة الحسابات الحالية وديون V8 وبنود الشهر، دون ترحيل العمليات التاريخية أو احتسابها مرة ثانية. هل تريد المتابعة؟"))return;
+   const result=loadOld({format:"FinanceCenterBackupV2",accounts:oldAccounts,budget:oldBudget,exportedAt:new Date().toISOString()});
+   keep();alert(result);
+  }catch(err){alert("تعذر استيراد V8 المحلي: "+err.message)}
+  return;
+ }
  if(action==="reset"){
   if(confirm("هل تريد مسح بيانات هذا المركز الجديد بالكامل؟ تأكد من تنزيل نسخة احتياطية أولًا.")&&confirm("تأكيد أخير: مسح الحسابات والحركات والميزانية الجديدة؟")){
    data=def();localStorage.removeItem(KEY);render();
