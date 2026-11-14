@@ -1,1 +1,11 @@
-{"name":"المركز المالي V8","short_name":"المركز المالي","start_url":"./","scope":"./","display":"standalone","background_color":"#eef3f7","theme_color":"#12384d","lang":"ar","dir":"rtl"}
+{
+  "name": "بوصلة المال — المركز المالي الفعلي",
+  "short_name": "بوصلة المال",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f6fd",
+  "theme_color": "#323d81",
+  "lang": "ar",
+  "dir": "rtl"
+}
