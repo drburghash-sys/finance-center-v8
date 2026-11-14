@@ -101,6 +101,7 @@ function parse(raw,data){
   if(!from&&candidates.length===1)from=candidates[0].id;
  }
  if(kind==="expense"&&outgoing&&from&&to&&from!==to)kind="transfer";
+ if((kind==="income"||kind==="profit"||kind==="transfer")&&from===to)from="";
  if(kind==="transfer"&&!from&&!to){
   const scoped=[...selected].map(id=>all.find(x=>x.id===id)).filter(isBankAccount);
   if(scoped.length===1){if(outgoing)from=scoped[0].id;else if(incoming)to=scoped[0].id}
