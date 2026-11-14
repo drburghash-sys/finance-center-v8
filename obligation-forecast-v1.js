@@ -49,7 +49,9 @@
    return Math.min(amount(project.profitToObligations),amount(project.expectedNetProfit));
  }
  function isObligationsDue(c){
-   if(typeof c.useObligations==="boolean")return c.useObligations;
+   if(c.obligationFundingExplicit===true)return !!c.useObligations;
+   if(c.useObligations===true)return true;
+   // Old backup imports set false even when the source goal never specified a funding account.
    return /مدرس|تعليم|جامع|رسوم|سيار|صيان|مركب|فحص|تأمين|مركبة/i.test(c.name||"");
  }
  function dataInputs(data,opts={}){
