@@ -34,6 +34,15 @@
   const expense=getSum(x=>x.type==="expense"),saving=getSum(x=>x.type==="saving"),invest=getSum(x=>x.type==="investment");
   const visaBudget=getSum(x=>x.type==="debt"&&/فيزا|visa/i.test(x.name||""));
   const fallbackLoans=getSum(x=>x.type==="debt"&&!/فيزا|visa|دراهم/i.test(x.name||""));
+  if((data.commitments||[]).length){
+   plan.goals=data.commitments.map(c=>{
+    const previous=(plan.goals||[]).find(g=>g.id===c.sourceId||g.name===c.name)||{};
+    const repeat=Math.max(1,Math.round(n(c.count)||1)),gap=Math.max(1,Math.round(n(c.interval)||12));
+    return{...previous,id:c.sourceId||c.id,name:c.name,date:c.firstMonth,amount:positive(c.amount),count:repeat,interval:gap,
+      paymentMode:repeat===1?"once":gap===1?"monthly":"periodic",enabled:c.active!==false,
+      useObligations:typeof c.useObligations==="boolean"?c.useObligations:!!previous.useObligations};
+   });
+  }
   const accounts=data.accounts||[],bankCash=accounts.filter(x=>x.role==="bank").reduce((v,x)=>v+balance(data,x),0),
     reservedCash=accounts.filter(x=>x.role==="reserve").reduce((v,x)=>v+balance(data,x),0),
     invested=accounts.filter(x=>x.role==="investment").reduce((v,x)=>v+Math.max(0,balance(data,x)),0);
@@ -111,20 +120,20 @@
    '</div><div class="buttons"><button type="button" class="button primary" data-action="saveForecast">تحديث الرسم</button><button type="button" class="button outline" data-action="resetForecast">الرجوع لقيم البيانات الأصلية</button></div></details>';
  }
  function visaView(data,model){
-  const p=model.plan,r=model.result,rows=periodLabels(r,p.settings.retirement,6),max=range(rows,x=>Math.max(x.visaDebt,x.restoreAccumulated));
+  const p=model.plan,r=model.result,rows=periodLabels(r,p.settings.retirement,Math.max(6,Math.ceil(r.rows.length/12))),max=range(rows,x=>Math.max(x.visaDebt,x.restoreAccumulated));
   return'<div class="forecast-metrics">'+
   infoCard("رصيد الفيزا الآن",model.visaBalance,"من الحسابات المستوردة","coral")+
   infoCard("رصيد الفيزا بنهاية الفترة",r.summary.lastVisa,"حسب سداد الفيزا والمشتريات","coral")+
   infoCard("إعادة رأسمال دراهم خلال الخطة",Math.max(0,p.darahim.restoreTarget-r.summary.restoreLeft),"مقدار مفترض إعادة استثماره","violet")+
   infoCard("متبقي لإعادة رأس مال دراهم",r.summary.restoreLeft,"مبلغ مخطط لإعادته","blue")+
   '</div>'+
-  '<div class="forecast-card"><h3>علاقة سداد الفيزا بإعادة رأس مال دراهم</h3><p class="hint">الأحمر: الرصيد المتوقع للفيزا • البنفسجي: المتراكم في إعادة رأس مال دراهم. البيانات تُعرض كل ٦ أشهر لتقليل الازدحام.</p>'+
+  '<div class="forecast-card"><h3>علاقة سداد الفيزا بإعادة رأس مال دراهم</h3><p class="hint">الأحمر: الرصيد المتوقع للفيزا • البنفسجي: المتراكم في إعادة رأس مال دراهم. البيانات تُعرض على فترات منتظمة لتقليل الازدحام.</p>'+
   rows.map(row=>'<div class="forecast-month '+(row.retired?"retired":"")+'"><b>'+safe(row.month)+(row.month===p.settings.retirement?' — بداية التقاعد':'')+'</b>'+
   axisBar("الدين المتبقي للفيزا",row.visaDebt,max,color.visa)+
   axisBar("المعاد إلى دراهم",row.restoreAccumulated,max,color.restored)+'</div>').join("")+'</div>';
  }
  function liquidityView(data,model){
-  const p=model.plan,r=model.result,rows=periodLabels(r,p.settings.retirement,6),max=range(rows,x=>Math.max(Math.abs(x.cash),x.obligationsReserve));
+  const p=model.plan,r=model.result,rows=periodLabels(r,p.settings.retirement,Math.max(6,Math.ceil(r.rows.length/12))),max=range(rows,x=>Math.max(Math.abs(x.cash),x.obligationsReserve));
   const before=r.rows.filter(x=>!x.retired),after=r.rows.filter(x=>x.retired);
   const retireLine=after[0]||null;
   return'<div class="forecast-metrics">'+
