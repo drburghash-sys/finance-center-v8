@@ -508,14 +508,14 @@ function storeRecord(name,record){
 function saveForm(form){
  const v=Object.fromEntries(new FormData(form).entries()),kind=modalType;
  if(kind==="budgetSalary"){
-  if(!/^d{4}-d{2}$/.test(v.month)||!Number.isFinite(Number(v.salary))||Number(v.salary)<0)throw Error("أدخل راتبًا صحيحًا للشهر");
+  if(!/^[0-9]{4}-[0-9]{2}$/.test(v.month)||!Number.isFinite(Number(v.salary))||Number(v.salary)<0)throw Error("أدخل راتبًا صحيحًا للشهر");
   ensureIncomePlan(v.month).salary=Number(v.salary);period=v.month;
  }
  else if(kind==="budgetIncome"){
   const name=String(v.name||"").trim(),amount=Number(v.amount),m=String(v.month||"");
-  if(!/^d{4}-d{2}$/.test(m)||!name||!Number.isFinite(amount)||amount<=0)throw Error("أدخل مصدر الدخل والمبلغ الصحيح للشهر");
+  if(!/^[0-9]{4}-[0-9]{2}$/.test(m)||!name||!Number.isFinite(amount)||amount<=0)throw Error("أدخل مصدر الدخل والمبلغ الصحيح للشهر");
   const bucket=ensureIncomePlan(m);
-  const normalize=x=>String(x||"").replace(/s+/g,"").toLowerCase();
+  const normalize=x=>String(x||"").replace(/\s+/g,"").toLowerCase();
   const isDarahim=x=>/دراهم|darahim/i.test(x||"");
   const same=bucket.lines.some(x=>x.id!==editingId&&(normalize(x.name)===normalize(name)||(isDarahim(x.name)&&isDarahim(name))));
   if(same)throw Error("هذا الدخل مسجل بالفعل لهذا الشهر. استخدم زر تعديل على السطر الموجود بدل إضافته مرتين.");
