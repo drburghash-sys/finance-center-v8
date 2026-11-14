@@ -413,7 +413,7 @@ function contentProjects(){
   return panel("خطط أرباح المشاريع",entryList(data.projects.map(p=>({
     title:p.name,
     subtitle:(p.forecastEnabled?"التنبؤ مفعل":"التنبؤ غير مفعل")+" • "+(p.profitStart||"بدون تاريخ")+" • "+(Number(p.profitInterval)===0?"دفعة واحدة":!p.profitInterval?"غير محدد":"كل "+p.profitInterval+" شهر"),
-    value:"ربح صافي "+money(p.expectedNetProfit||0)+" • للالتزامات "+money(p.profitToObligations||0),
+    value:"الربح "+money(p.expectedNetProfit||0)+" • للالتزامات "+money(p.profitToObligations||0)+" • المتبقي "+money(Math.max(0,num(p.expectedNetProfit)-num(p.profitToObligations))),
     actions:button("ضبط الأرباح","editProject",p.id,"outline")
   })),"لا توجد مشاريع؛ أضف مشروعًا أولًا"),button("إضافة مشروع","newProject",null,"primary"))+
   '<p class="body-note">هذه مبالغ متوقعة وليست إيرادات حدثت بالفعل. تحدد ربح كل مشروع بعد المصروفات، ثم المبلغ الذي يذهب منه إلى حساب الالتزامات. إذا كان هذا المبلغ داخل ادخار الميزانية بالفعل، فعّل خيار «محتسب في الميزانية» لتجنب إضافته مرتين.</p>'+
@@ -422,7 +422,7 @@ function contentProjects(){
  return panel("المشاريع المسجلة",entryList(data.projects.map(p=>{
   const tx=data.moves.filter(x=>x.projectId===p.id),income=total(tx.filter(x=>x.kind==="income")),out=total(tx.filter(x=>x.kind==="expense"));
   return {title:p.name,subtitle:"دخل فعلي "+money(income)+" • مصروف فعلي "+money(out)+
-   (p.forecastEnabled?" • الربح المتوقع "+money(p.expectedNetProfit||0)+" / المخصص للالتزامات "+money(p.profitToObligations||0):" • لا توجد أرباح متوقعة مفعّلة"),
+   (p.forecastEnabled?" • الربح المتوقع "+money(p.expectedNetProfit||0)+" / للالتزامات "+money(p.profitToObligations||0)+" / المتبقي "+money(Math.max(0,num(p.expectedNetProfit)-num(p.profitToObligations))):" • لا توجد أرباح متوقعة مفعّلة"),
    value:"الصافي الفعلي "+money(income-out),actions:actions("Project",p.id)};}),"لا توجد مشاريع مُسجّلة"),button("إضافة مشروع","newProject",null,"primary")+
  button("إعداد أرباح المشاريع","projectForecasts",null,"outline"))+
  '<p class="body-note">الأرباح الفعلية من الحركات المسجلة فقط. الأرباح المتوقعة تظهر منفصلة في «الأرباح المتوقعة»، ولا تضاف إلى البنك إلا إذا أدخلت حركة مالية حقيقية.</p>';
@@ -487,7 +487,7 @@ function editor(kind,id){
  else if(kind==="commitment"){title="تسجيل موعد التزام";inner=field("الالتزام (رسوم مدرسة / سيارة / صيانة)","name","","text","required")+field("شهر أول استحقاق","firstMonth",period,"month","required")+amount+field("عدد الدفعات","count","1","number","required")+field("الفاصل بين الدفعات بالأشهر","interval","1","number","required")+select("هل يُغطّى هذا الاستحقاق من حساب الالتزامات؟","useObligations",[["yes","نعم — من حساب الالتزامات"],["no","لا — من مصدر آخر"]],"yes");}
  else if(kind==="debt"){title="إضافة رصيد دين حقيقي";inner=field("اسم الدين","name","","text","required")+field("الرصيد الحالي من كشف البنك","opening","","number","required")+field("تاريخ الرصيد","asOf",now(),"date")+field("آخر ٤ أرقام لبطاقة الفيزا","cardLast4")+select("النوع","kind",[["loan","قرض بنكي"],["credit","بطاقة فيزا"]],"loan");}
  else if(kind==="project"){title=editingId?"تعديل المشروع وأرباحه":"إضافة مشروع";inner=field("اسم المشروع","name","","text","required")+field("وصف اختياري","description")+
-  '<div class="form-section-note">**الأرباح المتوقعة — لا تُسجل كدخل بنكي فعلي**</div>'+
+  '<div class="form-section-note">الأرباح المتوقعة — لا تُسجل كدخل بنكي فعلي</div>'+
   select("إدخال أرباح المشروع في التنبؤ؟","forecastEnabled",[["false","لا — حتى تبدأ الخطة"],["true","نعم — أدرج الأرباح المتوقعة"]],"false")+
   field("صافي الربح المتوقع لكل دفعة (بالريال)","expectedNetProfit","0","number")+
   field("أول شهر متوقع لاستلام الأرباح","profitStart",changeMonth(month(),"next"),"month")+
