@@ -13,12 +13,14 @@ let data;
 try{data=JSON.parse(localStorage.getItem(KEY)||"null")||def();}catch(e){data=def()}
 ["accounts","moves","budget","commitments","debts","projects","journal"].forEach(k=>{if(!Array.isArray(data[k]))data[k]=[]});
 if(!data.seenHashes||typeof data.seenHashes!=="object")data.seenHashes={};
+if(!data.confirmations||typeof data.confirmations!=="object")data.confirmations={accounts:{},budget:{}};
+if(!data.confirmations.accounts)data.confirmations.accounts={};
 if(!Array.isArray(data.learnedRules))data.learnedRules=[];
 if(!data.legacy||typeof data.legacy!=="object")data.legacy={budgetMonths:{},incomeRecords:[],debtLogs:[]};
-let page="home",sub="summary",period=month(),modalType="",editingId="",chartKind="expenses",smsDraft=null,smsStatus="";
+let page="home",sub="summary",period=month(),modalType="",editingId="",chartKind="expenses",smsDraft=null,smsStatus="",bankPick="",accountPick="";
 const nav={
 home:[["summary","ملخص اليوم"],["recent","آخر الحركات"]],
-accounts:[["balances","الأرصدة الحقيقية"],["transfers","التحويلات"],["paste","لصق رسالة البنك"]],
+accounts:[["balances","الأرصدة الحقيقية"],["funding","تأكيد تحويلات الحسابات"],["transfers","التحويلات"],["paste","لصق رسالة البنك"]],
 budget:[["month","ميزانية الشهر"],["categories","المصروفات الفعلية"],["history","الأشهر السابقة"]],
 moves:[["ledger","سجل الحركات"],["income","الإيرادات"],["spend","المصروفات"],["paste","إدخال من رسالة"]],
 obligations:[["reserve","حساب الادخار"],["due","الاستحقاقات"],["catalog","إدارة المواعيد"],["paid","المدفوع فعليًا"]],
@@ -173,8 +175,54 @@ function contentImportReview(){
  '<p class="body-note">الحركات التاريخية محفوظة للعرض والتحليل ضمن الرصيد النهائي المستورد. لا تنشئ عمليات سداد جديدة لفيزا أو دراهم إلا إذا حدثت بعد تاريخ النسخة أو لم تكن موجودة فيها.</p>';
 }
 
+function bankGroup(a){
+ const t=String(a.bank||"غير مصنف").trim().toLowerCase().replace(/\s+/g,"");
+ if(/d360|دي360|د٣٦٠/.test(t))return"D360";
+ if(/أهلي|الاهلي|ncb|snb/.test(t))return"الأهلي";
+ if(/إنماء|انماء|alinma/.test(t))return"الإنماء";
+ if(/stc|استي|إس\.?تي/.test(t))return"STC";
+ if(/دراهم|darahim/.test(t))return"دراهم";
+ return String(a.bank||"غير مصنف").trim()||"غير مصنف";
+}
+function bankConfirmations(){return data.confirmations.accounts[period]||(data.confirmations.accounts[period]={})}
+function isAccountConfirmed(a){return bankConfirmations()[a.id]===true}
+function bankGroups(){const names=[...new Set(data.accounts.map(bankGroup))];return names.map(name=>({name,children:data.accounts.filter(x=>bankGroup(x)===name)}))}
+function contentAccountFunding(){
+ const groups=bankGroups();
+ if(!groups.length)return panel("تأكيد التحويلات",blank("استورد الحسابات أو أضفها أولًا"));
+ if(!bankPick||!groups.some(g=>g.name===bankPick))bankPick=groups[0].name;
+ const group=groups.find(g=>g.name===bankPick);
+ if(!accountPick||!group.children.some(a=>a.id===accountPick))accountPick=group.children[0]?.id||"";
+ const account=acc(accountPick);
+ const allDone=group.children.length>0&&group.children.every(isAccountConfirmed);
+ const completed=groups.filter(g=>g.children.length&&g.children.every(isAccountConfirmed)).length;
+ const groupOptions=groups.map(g=>{
+  const complete=g.children.every(isAccountConfirmed);return[g.name,(complete?"✓ ":"○ ")+g.name+" ("+g.children.filter(isAccountConfirmed).length+"/"+g.children.length+")"];
+ });
+ const accountOpts=group.children.map(a=>[a.id,(isAccountConfirmed(a)?"✓ ":"○ ")+a.name+" •••• "+(a.last4||"—")]);
+ const previous=data.legacy?.budgetMonths?.[period]?.accountStatus||{};
+ const oldGroups=data.legacy?.budgetAccounts||[];
+ const matching=oldGroups.filter(x=>bankGroup({bank:x.name||""})===bankPick).map(x=>({name:x.name,confirmed:previous[x.id]===true})).filter(x=>previous[oldGroups.find(a=>a.name===x.name)?.id]!==undefined);
+ const marked=group.children.filter(isAccountConfirmed).length;
+ const selector='<div class="funding-selectors"><label class="form-field"><span>أولًا: اختر البنك</span><select id="fundBank">'+options(groupOptions,bankPick)+'</select></label>'+
+ '<label class="form-field"><span>ثانيًا: اختر الحساب الفرعي</span><select id="fundAccount">'+options(accountOpts,accountPick)+'</select></label></div>';
+ const bankBanner='<div class="bank-banner '+(allDone?"confirmed":"pending")+'"><b>'+esc(bankPick)+'</b><span>'+(allDone?"✓ جميع الحسابات مؤكدة لهذا الشهر":"بانتظار تأكيد "+(group.children.length-marked)+" حساب")+'</span><strong>'+marked+" / "+group.children.length+'</strong></div>';
+ const acct='<div class="funding-account '+(account&&isAccountConfirmed(account)?"confirmed":"pending")+'">'+
+ (account?'<b>'+esc(account.name)+'</b><small>'+esc(account.bank)+" •••• "+esc(account.last4||"—")+'</small><strong>'+money(accountBalance(account))+'</strong>'+
+ '<span class="fund-state">'+(isAccountConfirmed(account)?"✓ تم تأكيد التحويل":"لم يؤكد التحويل بعد")+'</span>'+
+ button(isAccountConfirmed(account)?"إلغاء تأكيد هذا الحساب":"تأكيد تحويل هذا الحساب","toggleAccountFunding",account.id,isAccountConfirmed(account)?"outline":"primary"):"")+'</div>';
+ const oldText=matching.length?'<p class="hint">من ميزانية V8 القديمة: '+matching.map(x=>esc(x.name)+" — "+(x.confirmed?"تم تأكيد المجموعة":"لم تؤكد المجموعة")).join(" • ")+'</p>':"";
+ const names=groups.map(g=>({title:g.name,subtitle:g.children.length+" حساب فرعي • "+g.children.filter(isAccountConfirmed).length+" مؤكد",value:g.children.every(isAccountConfirmed)?"✓ مكتمل":"غير مكتمل",tag:g.children.every(isAccountConfirmed)?"مكتمل":"قيد التأكيد",tagType:g.children.every(isAccountConfirmed)?"done":"warn"}));
+ return stats([box("البنوك المكتملة",completed,"من "+groups.length+" بنوك","violet"),box("حسابات مؤكدة",data.accounts.filter(isAccountConfirmed).length,"من "+data.accounts.length+" حساب","blue")])+
+ panel("تأكيد تحويلات "+period,selector+bankBanner+acct+
+ '<div class="buttons">'+button(allDone?"إلغاء تأكيد جميع حسابات البنك":"تأكيد جميع حسابات البنك","toggleBankFunding",bankPick,allDone?"outline":"primary")+'</div>'+oldText+
+ '<p class="body-note">هذا التأكيد يغيّر حالة المتابعة ولون البنك والحساب لهذا الشهر فقط. لا ينشئ حركة بنكية ولا يغيّر الرصيد. لتسجيل تحويل نقدي فعلي استخدم «تحويل جديد» أو لصق رسالة البنك.</p>')+
+ panel("حالة جميع البنوك",entryList(names));
+}
+
 function contentAccounts(){
  if(sub==="paste")return contentSMS();
+ if(sub==="funding")return contentAccountFunding();
  if(sub==="transfers"){
   const arr=data.moves.filter(x=>x.kind==="transfer").slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,35);
   return panel("التحويلات بين الحسابات",entryList(arr.map(x=>({title:(acc(x.from)?.name||"—")+" ← "+(acc(x.to)?.name||"—"),subtitle:x.date+" • لا يعد مصروفًا",value:money(x.amount),actions:actions("Move",x.id)})), "لا توجد تحويلات"),button("تحويل جديد","newTransfer",null,"primary"));
@@ -189,7 +237,11 @@ function contentBudget(){
  data.moves.filter(m=>m.date.slice(0,7)===period&&(m.kind==="expense"||m.kind==="charge")).forEach(m=>{const k=m.category||"أخرى";categories[k]=(categories[k]||0)+num(m.amount)});
  const metrics=stats([box("بنود مخططة للشهر",planned,"تتضمن تحويل الادخار إن وجد","blue"),box("منها ادخار مخطط",saved,"ليس مصروفًا فعليًا","violet"),box("المصروف الفعلي",expenseM(),"من الحركات المسجلة","coral")]);
  if(sub==="categories")return metrics+panel("المصروفات المنفذة حسب البند",bars(Object.entries(categories).sort((a,b)=>b[1]-a[1]),"تم احتساب الصرف من عمليات فعلية فقط"));
- return metrics+(data.legacy?.budgetMonths?.[period]?panel("الدخل المخطط حسب النسخة الأصلية",entryList([{title:"الراتب في الميزانية",value:money(data.legacy.budgetMonths[period].salary)},...(data.legacy.budgetMonths[period].incomeLines||[]).map(x=>({title:x.name,value:money(x.amount)}))])):"")+panel("بنود ميزانية "+period,entryList(items.map(x=>({title:x.name,subtitle:x.type==="saving"?"ادخار مخطط — لا يصنف كمصروف":x.type==="debt"?"سداد دين مخطط":x.type==="investment"?"استثمار مخطط — ليس مصروف معيشة":"مصروف مخطط",value:money(x.amount),tag:x.type==="saving"?"ادخار":"خطة",actions:actions("Budget",x.id)})),"لم تُنشأ ميزانية لهذا الشهر"),button("إضافة بند","newBudget",null,"primary")+button("نسخ بنود الشهر السابق","copyPrevBudget",null,"outline"))+
+ const paidCount=items.filter(x=>x.paid).length;
+ const budgetRows=items.map(x=>'<div class="budget-line '+(x.paid?'confirmed':'pending')+'"><div class="budget-item-main"><b>'+esc(x.name)+'</b><small>'+esc(x.category||x.type||"مصروف مخطط")+'</small><strong>'+money(x.amount)+'</strong></div><div class="budget-item-state">'+pill(x.paid?'✓ تم تأكيد السداد':'لم يُؤكد',x.paid?'done':'warn')+
+ button(x.paid?'إلغاء التأكيد':'تأكيد السداد','toggleBudgetPaid',x.id,x.paid?'outline':'primary')+actions("Budget",x.id)+'</div></div>').join('');
+ return metrics+stats([box("بنود مؤكدة",paidCount,"من "+items.length+" بندًا","blue"),box("قيمة البنود المؤكدة",total(items.filter(x=>x.paid)),"حالة متابعة من الميزانية فقط","violet")])+
+ (data.legacy?.budgetMonths?.[period]?panel("الدخل المخطط حسب النسخة الأصلية",entryList([{title:"الراتب في الميزانية",value:money(data.legacy.budgetMonths[period].salary)},...(data.legacy.budgetMonths[period].incomeLines||[]).map(x=>({title:x.name,value:money(x.amount)}))])):"")+panel("بنود ميزانية "+period,(items.length?'<div class="budget-list">'+budgetRows+"</div>":blank("لم تُنشأ ميزانية لهذا الشهر")),button("إضافة بند","newBudget",null,"primary")+button("نسخ بنود الشهر السابق","copyPrevBudget",null,"outline"))+
  panel("التنفيذ الفعلي",entryList([{title:"مصروفات فعلية",value:money(expenseM())},{title:"سداد ديون من البنك",value:money(paidM())},{title:"ادخار محوّل بالفعل",value:money(total(movements().filter(m=>m.kind==="transfer"&&acc(m.to)?.role==="reserve")))}]));
 }
 function moveName(m){return ({income:"دخل",expense:"مصروف",transfer:"تحويل بين حسابين",repayment:"سداد دين",charge:"شراء بالفيزا",profit:"ربح استثماري"})[m.kind]||m.legacyType||"حركة"}
@@ -491,12 +543,31 @@ $("quickAction").addEventListener("click",()=>{
   if(["accounts","moves","debts"].includes(page)){sub="paste";smsDraft=null;smsStatus="";render();}
   else editor("expense");
 });
+$("content").addEventListener("change",e=>{
+ if(e.target.id==="fundBank"){bankPick=e.target.value;accountPick="";render();}
+ else if(e.target.id==="fundAccount"){accountPick=e.target.value;render();}
+});
 $("content").addEventListener("click",e=>{
  const target=e.target.closest("[data-action]");if(!target)return;
  const action=target.dataset.action;
  const m={newAccount:"account",newBudget:"budget",newCommitment:"commitment",newDebt:"debt",newProject:"project",newInvestmentAccount:"account",newMove:"expense",newExpense:"expense",newTransfer:"transfer",newRepayment:"repayment",newProfit:"profit"};
  if(action==="newInvestmentAccount"){editor("account");const role=$("editorForm").querySelector('[name="role"]');if(role)role.value="investment";return;}
  if(m[action]){editor(m[action]);return;}
+ if(action==="toggleBudgetPaid"){
+  const x=data.budget.find(x=>x.id===target.dataset.id&&x.month===period);
+  if(x){x.paid=!x.paid;keep()}
+  return;
+ }
+ if(action==="toggleAccountFunding"){
+  const x=acc(target.dataset.id);
+  if(x){const flags=bankConfirmations();flags[x.id]=!isAccountConfirmed(x);keep();}
+  return;
+ }
+ if(action==="toggleBankFunding"){
+  const g=bankGroups().find(x=>x.name===target.dataset.id);
+  if(g){const confirmed=g.children.every(isAccountConfirmed);const flags=bankConfirmations();g.children.forEach(a=>flags[a.id]=!confirmed);keep();}
+  return;
+ }
  if(action==="toggleCommitment"){
   const c=data.commitments.find(x=>x.id===target.dataset.id);
   if(c){c.active=c.active===false?true:false;keep()}
