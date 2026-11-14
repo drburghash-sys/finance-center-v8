@@ -2,7 +2,7 @@
 (function(){
 const KEY="bms_actual_20261114_v1";
 const $=id=>document.getElementById(id);
-const now=()=>new Date().toISOString().slice(0,10);
+const now=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
 const month=()=>now().slice(0,7);
 const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36);
 const money=v=>new Intl.NumberFormat("ar-SA",{maximumFractionDigits:2}).format(Number(v)||0)+" ر.س";
@@ -42,7 +42,8 @@ const netCash=()=>total(banks(),accountBalance);
 const reserveCash=()=>total(reserves(),accountBalance);
 const invCash=()=>total(data.accounts.filter(x=>x.role==="investment"),accountBalance);
 const sumDebt=()=>total(data.debts,debtsBalance);
-const changeMonth=(m,v)=>{if(v==="prev"){const[y,x]=m.split("-").map(Number);return new Date(y,x-2,1).toISOString().slice(0,7)}if(v==="next"){const[y,x]=m.split("-").map(Number);return new Date(y,x,1).toISOString().slice(0,7)}return m};
+const monthKey=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+const changeMonth=(m,v)=>{const[y,x]=m.split("-").map(Number);if(v==="prev")return monthKey(new Date(y,x-2,1));if(v==="next")return monthKey(new Date(y,x,1));return m};
 function keep(){localStorage.setItem(KEY,JSON.stringify(data));render();}
 function box(title,value,hint,accent){return '<div class="metric '+(accent||'')+'"><div class="metric-label">'+esc(title)+'</div><strong>'+money(value)+'</strong><small>'+esc(hint||"")+'</small></div>'}
 function panel(title,body,action){return '<section class="panel"><div class="panel-top"><h2>'+esc(title)+'</h2>'+(action||"")+'</div>'+body+'</section>'}
@@ -90,7 +91,7 @@ function contentMoves(){
  const arr=data.moves.filter(x=>x.date.slice(0,7)===period&&(!kinds||kinds.includes(x.kind))).slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,100);
  return stats([box("دخل الشهر",incomeM(),"دخل وأرباح مدخلة","blue"),box("مصروف الشهر",expenseM(),"يشمل مشتريات الفيزا المسجلة","coral"),box("سداد الديون",paidM(),"تدفق نقدي وليس شراء جديدًا","amber")])+panel("حركات "+period,entryList(arr.map(m=>({title:moveName(m)+" • "+(m.category||"بدون تصنيف"),subtitle:m.date+" • "+moveAccounts(m)+(m.commitmentKey?" • مرتبط باستحقاق":""),value:money(m.amount),tag:m.kind==="transfer"?"ليس مصروفًا":"",negative:["expense","charge"].includes(m.kind)})),"لا توجد حركات في هذا الشهر"),button("إضافة حركة","newMove",null,"primary"));
 }
-function addMonths(s,n){const a=s.split("-").map(Number);return new Date(a[0],a[1]-1+Number(n),1).toISOString().slice(0,7)}
+function addMonths(s,n){const a=s.split("-").map(Number);return monthKey(new Date(a[0],a[1]-1+Number(n),1))}
 function dueItems(){
  const rows=[];
  data.commitments.filter(x=>x.active!==false).forEach(c=>{const count=Math.min(240,Math.max(1,Number(c.count)||1)),gap=Math.max(1,Number(c.interval)||1);
@@ -272,7 +273,7 @@ function loadOld(doc){
  let nAcc=0,nBud=0,nDebt=0;
  rawBank.accounts.filter(a=>a.kind!=="credit").forEach(a=>{
   if(data.accounts.some(x=>x.legacyId===a.id))return;
-  const role=a.id==="amuju7ih2gtiyr"||a.id===rawBank.finance?.obligationAccountId?"reserve":/دراهم|darahim/i.test((a.name||"")+" "+(a.bank||""))?"investment":"bank";
+  const role=a.id==="amuju7ih2gtiyr"||a.id===rawBank.finance?.obligationAccountId||/حساب\s*الالتزام/i.test(a.name||"")?"reserve":/دراهم|darahim/i.test((a.name||"")+" "+(a.bank||""))?"investment":"bank";
   data.accounts.push({id:uid(),legacyId:a.id,name:a.name||"حساب",bank:a.bank||"",last4:a.last4||"",role,opening:Number(a.balance)||0});
   nAcc++;
  });
