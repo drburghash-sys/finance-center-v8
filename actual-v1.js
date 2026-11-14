@@ -306,9 +306,10 @@ function contentChart(){
 function contentData(){
  if(sub==="inspect")return contentImportReview();
  if(sub==="about")return panel("كيف نحسب المال؟",'<div class="rules"><p><b>١. الرصيد الحقيقي:</b> الرصيد الابتدائي المدخل + الوارد المثبت − الصادر المثبت.</p><p><b>٢. حساب الالتزامات:</b> نوع من حساباتك البنكية، يظهر ضمن النقد الكلي مرة واحدة؛ التحويل إليه ليس مصروفًا، والصرف منه مصروف واحد.</p><p><b>٣. الميزانية:</b> أرقام مخططة للمقارنة؛ لا تقلل الحسابات البنكية بمجرد إدخالها.</p><p><b>٤. الرسوم والقروض:</b> مواعيد أو أرصدة مرجعية حتى تُسجّل حركة دفع فعلية. سداد القرض يُخفض رصيد البنك، ويُنقص أصل الدين بالقيمة التي تؤكدها.</p><p><b>٥. المشاريع ودراهم:</b> الدخل والربح المعروضان فعليان ومدخلان، بلا نسبة عائد افتراضية.</p></div>');
- return panel("ملفاتك والنسخ الاحتياطية",'<p class="body-note">هذا إصدار جديد مستقل عن واجهة V8 السابقة، وبمخزن بيانات جديد. لا تُحذف البيانات القديمة تلقائيًا من المتصفح. ملف «المستقبل المالي» يُستورد كمواعيد وديون مرجعية، ولا يحوّل أهدافك إلى مصاريف مدفوعة.</p><div class="buttons">'+
+ return panel("ملفاتك والنسخ الاحتياطية",'<p class="body-note">يدعم هذا القسم استيراد النسخة الشاملة New_Finance_Full دفعة واحدة: جميع الحسابات وأرصدة الفيزا ودراهم، الحركات السابقة، أشهر الميزانية، سجل الديون، أهداف المدارس والسيارة والمشاريع، وحاسبة الراتب. الأرصدة تبدأ من تاريخ النسخة ولا يُعاد خصم أي حركة تاريخية منها. لا تُرفع الملفات إلى GitHub.</p><div class="buttons">'+
  button("تصدير جميع بيانات هذا المركز","export",null,"primary")+
  button("استيراد V8 المحفوظ على هذا الجهاز","importLocalV8",null,"outline")+
+ (localStorage.getItem(KEY+"_before_full_import")?button("استعادة حالة ما قبل الاستيراد","restorePreImport",null,"outline"):"")+
  '<label class="button outline file-button">استيراد ملف JSON<input id="importFile" type="file" accept=".json,application/json"></label>'+
  button("مسح بيانات المركز الجديد فقط","reset",null,"danger")+'</div><p class="hint">يمكن استيراد ملف خطة المستقبل المرفق، أو نسخة شاملة من V8 للحسابات والميزانية. لا تُرفع ملفاتك إلى GitHub.</p>');
 }
@@ -461,7 +462,7 @@ function completeImport(doc){
  // A separate rollback snapshot avoids silent loss of local new data.
  localStorage.setItem(KEY+"_before_full_import",before);
  localStorage.setItem(KEY,next);
- data=result.data;period=String(doc.budget?.month||month()).slice(0,7);page="data";sub="inspect";render();
+ data=result.data;period=month();page="data";sub="inspect";render();
  alert("تم استيراد جميع أقسام الملف: الحسابات والفيزا ودراهم، سجلات العمليات، الميزانيات السابقة، الأهداف، المشاريع والخطة. لم تُكرر أي خصومات.");
  return true;
 }
@@ -527,6 +528,14 @@ $("content").addEventListener("click",e=>{
  if(action==="clearSms"){smsDraft=null;smsStatus="";render();return;}
  if(action==="goData"){page="data";sub="backup";render();return;}
  if(action==="export"){download();return;}
+ if(action==="restorePreImport"){
+  const raw=localStorage.getItem(KEY+"_before_full_import");
+  if(!raw){alert("لا توجد نسخة رجوع محفوظة");return;}
+  if(!confirm("استعادة حالة المركز الجديدة قبل آخر استيراد شامل؟ سيُستبدل ما أدخلته بعد الاستيراد. يُنصح بتصدير نسخة الآن أولًا."))return;
+  try{const old=JSON.parse(raw);if(!Array.isArray(old.accounts)||!Array.isArray(old.moves))throw Error("بيانات الرجوع غير صالحة");data=old;keep();alert("تم استرجاع بيانات ما قبل آخر استيراد");}
+  catch(err){alert(err.message)}
+  return;
+ }
  if(action==="importLocalV8"){
   try{
    const oldAccounts=localStorage.getItem("bank_manager_v11_seeded_exact");
