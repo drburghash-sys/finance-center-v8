@@ -48,7 +48,7 @@ function fromPlan(doc,data){
   if(data.commitments.some(x=>x.id===id))continue;
   data.commitments.push({id,sourceId:g.id,name:String(g.name||"هدف"),firstMonth:String(g.date||"").slice(0,7),amount:positive(g.amount),count:Math.min(240,Math.max(1,Math.round(number(g.count)||1))),interval:String(g.paymentMode||"")==="monthly"?1:Math.min(120,Math.max(1,Math.round(number(g.interval)||12))),active:g.enabled!==false,source:"import-plan",kind:"planned",useObligations:!!g.useObligations});
   goals++;
-  if(/مشروع|استثمار/i.test(g.name||"")&&!data.projects.some(x=>x.sourceId===g.id)){
+  if(/مشروع|استثمار|بناء|عقار/i.test(g.name||"")&&!data.projects.some(x=>x.sourceId===g.id)){
    data.projects.push({id:"future-project-"+safeId(g.id),sourceId:g.id,name:String(g.name),status:"planned",description:"هدف مستقبلي وارد في الملف. لا تُعد أرباحه دخلًا فعليًا."});
   }
  }
