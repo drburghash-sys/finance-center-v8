@@ -9,7 +9,7 @@ const date=ts=>{const d=new Date(ts);return Number.isNaN(d.getTime())?new Date()
 const safeId=v=>String(v||"").replace(/[^a-zA-Z0-9_-]/g,"").slice(0,100);
 const hash=s=>{let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return(h>>>0).toString(16)};
 const normalize=t=>String(t||"").replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/g," ").replace(/[–—]/g,"-").replace(/\s+/g," ").trim();
-const empty=()=>({version:2,accounts:[],moves:[],budget:[],commitments:[],debts:[],projects:[],journal:[],seenHashes:{},learnedRules:[],legacy:{budgetMonths:{},budgetCategories:[],budgetAccounts:[],incomeRecords:[],salaryCalc:null,future:null,debtLogs:[],bankHistoryCount:0,bankSeenCount:0,sourceExportedAt:null}});
+const empty=()=>({version:2,accounts:[],moves:[],budget:[],commitments:[],debts:[],projects:[],journal:[],seenHashes:{},learnedRules:[],confirmations:{accounts:{},budget:{}},legacy:{budgetMonths:{},budgetCategories:[],budgetAccounts:[],incomeRecords:[],salaryCalc:null,future:null,debtLogs:[],bankHistoryCount:0,bankSeenCount:0,sourceExportedAt:null}});
 function isFull(doc){return ["UnifiedFinanceBackupV1","FinanceCenterBackupV1","FinanceCenterBackupV2"].includes(doc?.format)&&!!obj(doc?.accounts)&&!!obj(doc?.budget)}
 function kindForHistory(h,credit){
  const label=String(h.type||""),raw=String(h.raw||"");
