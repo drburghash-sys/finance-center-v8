@@ -70,6 +70,14 @@ function migrate(doc){
  if(!arr(oldBank.accounts).length||!arr(oldBudget.items).length)throw Error("ملف الأرصدة أو الميزانية غير مكتمل");
  const d=empty();
  d.legacy.sourceExportedAt=doc.exportedAt||null;
+ d.legacy.links=obj(doc.links)||{};
+ d.legacy.itemLinks=obj(doc.itemLinks)||{};
+ d.legacy.obligationsFund=obj(oldBank.finance?.fund)||null;
+ d.legacy.fundArchive=obj(oldBank.finance?.fundArchive)||null;
+ d.legacy.archivedDebts=arr(oldBank.finance?.archivedDebts);
+ d.legacy.bankHistoryOriginal=arr(oldBank.history);
+ d.legacy.learnedRulesOriginal=arr(oldBank.learnedRules);
+ d.legacy.budgetTrips=arr(oldBudget.trips);
  d.legacy.salaryCalc=obj(doc.salaryCalc);
  d.legacy.budgetCategories=arr(oldBudget.categories);
  d.legacy.budgetAccounts=arr(oldBudget.accounts);
@@ -117,7 +125,7 @@ function migrate(doc){
   const type=String(h.type||"");
   const debtId=creditByAccount.get(h.accountId)||((kind==="repayment"&&/فيزا\s*[١1]/.test(type))?d.debts.find(x=>/فيزا\s*[١1]/.test(x.name))?.id:(kind==="repayment"&&/فيزا\s*[٢2]/.test(type))?d.debts.find(x=>/فيزا\s*[٢2]/.test(x.name))?.id:"");
   const tx={id:"old-history-"+i+"-"+safeId(h.ts||i),legacyIndex:i,legacyType:type,date:date(h.ts),kind,amount:amt,from,to,debtId:debtId||"",principal:0,category:type.replace(/^سداد ميزانية\s*[—-]\s*/,"").slice(0,100),source:h.source||"bank",legacyLinkId:h.linkId||"",raw:String(h.raw||""),note:"سجل سابق ضمن الرصيد المستورد، لم يُخصم ثانية",posted:false,importedHistory:true};
-  if(amt>0)d.moves.push(tx);
+  d.moves.push(tx);
   if(tx.raw){const k=hash(normalize(tx.raw));d.seenHashes[k]=1;}
  }
  for(const [key,val]of Object.entries(obj(oldBank.seen)||{}))if(val)d.seenHashes[String(key)]=1;
@@ -130,7 +138,9 @@ function migrate(doc){
   const m=String(key).slice(0,7);
   const rows=arr(entry.items);
   for(const item of rows){
-   d.budget.push({id:"legacy-budget-"+m+"-"+safeId(item.id||hash(item.name)),legacyId:item.id,month:m,name:String(item.name||"بند"),amount:positive(item.amount),type:budgetType(item),category:item.category||"",paid:!!item.paid,legacyAccountId:item.accountId||"",notes:item.notes||"",due:item.due||""});
+   d.budget.push({id:"legacy-budget-"+m+"-"+safeId(item.id||hash(item.name)),legacyId:item.id,month:m,name:String(item.name||"بند"),amount:positive(item.amount),type:budgetType(item),category:item.category||"",paid:!!item.paid,legacyAccountId:item.accountId||"",linkedBankId:(
+    (obj(doc.itemLinks)||{})[item.id]?.bankAccountId||
+    (obj(doc.links)||{})[item.accountId]||""),notes:item.notes||"",due:item.due||""});
   }
   const incomeLines=arr(entry.incomes).map(x=>({name:x.name||"دخل إضافي",amount:number(x.amount)}));
   d.legacy.budgetMonths[m]={salary:number(entry.salary),incomeLines,budgetItems:rows.length,accountStatus:obj(entry.accountStatus)||{}};
