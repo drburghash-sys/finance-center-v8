@@ -173,6 +173,7 @@ function charts(d){
  const compare=[{label:"قبل التقاعد",income:average(before,"income"),expenses:average(before,"living"),loanPayment:average(before,"loanPayment"),payVisa:average(before,"payVisa"),restore:average(before,"restore"),invest:average(before,"invest"),toObligations:average(before,"toObligations")},
  {label:"بعد التقاعد",income:average(after,"income"),expenses:average(after,"living"),loanPayment:average(after,"loanPayment"),payVisa:average(after,"payVisa"),restore:average(after,"restore"),invest:average(after,"invest"),toObligations:average(after,"toObligations")}];
  const retirement=rows.find(x=>x.retired),negative=rows.filter(x=>x.cash<0).length;
+ const yearOfRetirement=(o.retirement||"").slice(0,4);years.forEach(x=>{if(x.label===yearOfRetirement)x.label+=" (تقاعد)"});
  let html='<p class="body-note">هذه الصفحة <b>توقع مالي</b> يبدأ من الأرصدة الفعلية الحالية. لا تغيّر المصروفات المسجلة أو الحسابات البنكية. كل رسم مستقل، والأعمدة تعرض ريالًا شهريًا أو رصيدًا بنهاية السنة.</p>';
  html+=metrics([{label:"السيولة الحرة اليوم",value:money(a.cash),hint:"فعلي من الحسابات",cls:"blue"},
  {label:"رصيد الفيزا اليوم",value:money(a.visa),hint:"فعلي من البطاقات",cls:"coral"},
@@ -181,7 +182,7 @@ function charts(d){
  html+=graph("الدخل والمصروف قبل التقاعد وبعده","متوسط شهري لكل مرحلة — أعمدة مقارنة، وليست إجمالي سنوات",compare,[{key:"income",label:"دخل"},{key:"expenses",label:"معيشة"},{key:"loanPayment",label:"قروض"},{key:"payVisa",label:"فيزا"}]);
  html+=graph("رصيد الفيزا والمتبقي لإعادة دراهم","الرصيد المتوقع بنهاية كل سنة. الانخفاض في البنود هو المطلوب مراقبته.",years,[{key:"visa",label:"دين الفيزا"},{key:"remaining",label:"المبلغ المتبقي لإعادة دراهم"}]);
  html+=graph("توزيع المبلغ الشهري","متوسط المبالغ المخصصة شهريًا في كل سنة — أرقام بالريال وليس نسبًا",years,[{key:"payVisa",label:"سداد الفيزا"},{key:"restore",label:"إعادة دراهم"},{key:"invest",label:"استثمار جديد"},{key:"toProjects",label:"مشاريع"},{key:"toObligations",label:"التزامات"}]);
- html+=graph("السيولة قبل التقاعد وبعده","رصيد نهاية السنة؛ الادخار المخصص لا يُجمع مرتين مع السيولة الحرة",years,[{key:"cash",label:"السيولة الحرة"},{key:"reserve",label:"حساب الالتزامات"},{key:"projects",label:"رصيد المشاريع"},{key:"portfolio",label:"محفظة دراهم"}]);
+ html+=graph("السيولة قبل التقاعد وبعده","رصيد نهاية السنة؛ الادخار المخصص لا يُجمع مرتين مع السيولة الحرة",years,[{key:"cash",label:"السيولة الحرة"},{key:"reserve",label:"حساب الالتزامات"},{key:"projects",label:"رصيد المشاريع"},{key:"portfolio",label:"محفظة دراهم"},{key:"profitHold",label:"أرباح افتراضية مجمعة"}]);
  html+='<section class="panel"><h2>تنبيهات تحتاج مراجعة</h2>'+
  (s.warnings.length?'<div class="retire-notes">'+s.warnings.map(x=>'<p>'+esc(x)+'</p>').join("")+'</div>':'<p class="hint">لا توجد تنبيهات محاسبية وفق الافتراضات الحالية.</p>')+
  '<div class="hint">عدد الأشهر التي تنخفض فيها السيولة الحرة عن الصفر: '+negative+' • مجموع الاستحقاقات المتوقع نقص تمويلها: '+money(s.totalUncovered)+'</div></section>';
@@ -195,11 +196,13 @@ function allocations(d){
  html+='<section class="panel"><h2>افتراضات التقاعد</h2><div class="form-grid">'+
  field("retirement","شهر بدء التقاعد",o.retirement,"month")+
  field("salary","الراتب الشهري حتى التقاعد",o.salary)+field("pension","المعاش بعد التقاعد",o.pension)+
- field("living","مصاريف المعيشة الشهرية",o.living)+field("loanPayment","أقساط القروض الشهرية",o.loanPayment)+
+ field("living","مصاريف المعيشة الشهرية",o.living)+field("loanPayment","أقساط القروض الشهرية",o.loanPayment)+field("loanEnd","آخر شهر لسداد القروض",o.loanEnd||"2031-11","month")+
  field("visaNew","مشتريات الفيزا الجديدة شهريًا",o.visaNew)+field("visaFees","رسوم الفيزا الشهرية",o.visaFees)+
  field("visaAPR","معدل تمويل الفيزا سنويًا (%)",o.visaAPR)+field("restoreRemaining","رصيد دراهم المطلوب إعادته",o.restoreRemaining)+
  field("annualInflation","ارتفاع المصروفات سنويًا (%)",o.annualInflation)+
- field("months","مدة الرسم بالأشهر",o.months)+'</div>'+
+ field("months","مدة الرسم بالأشهر",o.months)+
+ field("annualReturn","العائد السنوي الافتراضي لدراهم (%)",o.annualReturn||0)+
+ '<label class="form-field"><span>التصرف في العائد الافتراضي</span><select data-ret="profitMode"><option value="reinvest" '+(o.profitMode==="reinvest"?"selected":"")+' >إعادة استثمار تلقائية</option><option value="hold" '+(o.profitMode==="hold"?"selected":"")+' >تجميع الأرباح خارج المحفظة</option><option value="withdraw" '+(o.profitMode==="withdraw"?"selected":"")+' >سحب الأرباح الافتراضية إلى السيولة</option></select></label>'+'</div>'+
  '<div class="buttons"><button class="button primary" data-action="ret-save-settings">حفظ التقسيم والافتراضات</button><button class="button outline" data-action="ret-reset-settings">إعادة اقتراح الأرقام من الميزانية</button></div></section>';
  return html;
 }
@@ -238,14 +241,18 @@ function action(d,action,btn,rootElement,commit){
  const m=model(d);
  if(action==="ret-save-settings"){
   const v={...m,during:values("during"),after:values("after")};
-  for(const k of ["salary","pension","living","loanPayment","visaNew","visaFees","visaAPR","restoreRemaining","annualInflation","months"]){const x=Number(read(k));if(!Number.isFinite(x)||x<0)throw Error("تحقق من خانة "+k);v[k]=x}
+  for(const k of ["salary","pension","living","loanPayment","visaNew","visaFees","visaAPR","restoreRemaining","annualInflation","months","annualReturn"]){const x=Number(read(k));if(!Number.isFinite(x)||x<0)throw Error("تحقق من خانة "+k);v[k]=x}
   const rt=read("retirement");if(!/^\d{4}-\d{2}$/.test(rt))throw Error("حدد شهر التقاعد");
-  v.retirement=rt;v.months=Math.min(240,Math.max(24,Math.round(v.months||144)));
+  v.retirement=rt;
+  const loanEnd=read("loanEnd");if(!/^\d{4}-\d{2}$/.test(loanEnd))throw Error("حدد شهر نهاية القروض");
+  v.loanEnd=loanEnd;v.profitMode=read("profitMode");
+  if(!["reinvest","hold","withdraw"].includes(v.profitMode))throw Error("اختر التعامل مع عائد دراهم");
+  v.months=Math.min(240,Math.max(24,Math.round(v.months||144)));
   d.retirement=v;commit();return true;
  }
  if(action==="ret-add-draw"){
   const month=read("draw.month"),amount=Number(read("draw.amount"));
-  if(!/^\d{4}-\d{2}$/.test(month)||mi(month)<mi(curMonth()))throw Error("اختر الشهر الحالي أو شهرًا مستقبلًا.");
+  if(!/^\d{4}-\d{2}$/.test(month)||mi(month)<=mi(curMonth()))throw Error("اختر الشهر الحالي أو شهرًا مستقبلًا.");
   if(!Number.isFinite(amount)||amount<0)throw Error("مبلغ السحب يجب أن يكون صفرًا أو أكثر.");
   if(m.draws.some(x=>x.month===month))throw Error("يوجد تقسيم آخر يبدأ في هذا الشهر. احذف القديم قبل إضافة الجديد.");
   const entry={id:"draw"+Date.now().toString(36),month,amount,during:values("draw.during"),after:values("draw.after")};
