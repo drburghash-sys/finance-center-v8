@@ -35,7 +35,7 @@ function monthlyBasis(d){
  const saving=items.filter(x=>x.type==="saving").reduce((s,x)=>s+n(x.amount),0);
  const investment=items.filter(x=>x.type==="investment").reduce((s,x)=>s+n(x.amount),0);
  const loanItems=items.filter(x=>x.type==="debt"&&!/فيزا|دراهم|visa/i.test(x.name||"")).reduce((s,x)=>s+n(x.amount),0);
- return {salary,pension:n(p.pension),retirement:p.retirement||"2031-12",living:inBudget||n(p.monthlyExpenses),loanPayment:loanItems||n(p.fallbackLoanInstallments),visaNew:n(future.visa?.newMonthly),visaAPR:n(future.visa?.apr),visaFees:n(future.visa?.monthlyFees),annualInflation:n(p.inflation)||0,newInvestment:investment||n(future.darahim?.newInvestment),monthlySaving:saving,visaPool:visaItems||n(future.visa?.paymentPool),future};
+ return {salary,pension:n(p.pension),retirement:p.retirement||"2031-12",loanEnd:p.fallbackLoanEnd||"2031-11",living:inBudget||n(p.monthlyExpenses),loanPayment:loanItems||n(p.fallbackLoanInstallments),visaNew:n(future.visa?.newMonthly),visaAPR:n(future.visa?.apr),visaFees:n(future.visa?.monthlyFees),annualInflation:n(p.inflation)||0,newInvestment:investment||n(future.darahim?.newInvestment),monthlySaving:saving,visaPool:visaItems||n(future.visa?.paymentPool),future};
 }
 function defaults(d){
  const b=monthlyBasis(d),v=b.future.visa||{},p=b.future.darahim||{},during=defAlloc(),after=defAlloc();
@@ -47,8 +47,8 @@ function defaults(d){
  after.invest=b.newInvestment;after.obligations=b.monthlySaving;
  const restoredRemaining=Math.max(0,n(p.restoreTarget)-n(p.alreadyRestored));
  const oldDebt=(d.debts||[]).find(x=>/دراهم/i.test(x.name||""));
- return {version:1,retirement:b.retirement,pension:b.pension,salary:b.salary,living:b.living,loanPayment:b.loanPayment,
-   visaNew:b.visaNew,visaAPR:b.visaAPR,visaFees:b.visaFees,annualInflation:b.annualInflation,months:144,
+ return {version:1,retirement:b.retirement,loanEnd:b.loanEnd,pension:b.pension,salary:b.salary,living:b.living,loanPayment:b.loanPayment,
+   visaNew:b.visaNew,visaAPR:b.visaAPR,visaFees:b.visaFees,annualInflation:b.annualInflation,months:144,annualReturn:0,profitMode:"reinvest",
    restoreRemaining:oldDebt?n(oldDebt.opening):restoredRemaining,assumeFutureProjectIncome:false,
    projectIncome:0,projectIncomeStart:"2032-01",during,after,draws:[],goalsEnabled:true,projectionStart:curMonth()};
 }
@@ -73,11 +73,11 @@ function goals(data,start,end){
  return events;
 }
 function simulate(d){
- const o=model(d),a=dataSnapshot(d),start=mi(curMonth()),end=start+Math.min(240,Math.max(24,Math.round(n(o.months)||144))),
+ const o=model(d),a=dataSnapshot(d),start=mi(curMonth())+1,end=mi(curMonth())+1+Math.min(240,Math.max(24,Math.round(n(o.months)||144))),
        retire=mi(o.retirement),events=goals(d,start,end),due=new Map();
  for(const e of events){if(!due.has(e.month))due.set(e.month,[]);due.get(e.month).push(e)}
  const draws=o.draws.filter(x=>x.month&&x.amount>=0).slice().sort((x,y)=>x.month.localeCompare(y.month));
- let cash=a.cash,reserve=a.reserve,portfolio=a.portfolio,visa=a.visa,projects=0,remaining=n(o.restoreRemaining),
+ let cash=a.cash,reserve=a.reserve,portfolio=a.portfolio,visa=a.visa,projects=0,profitHold=0,remaining=n(o.restoreRemaining),
      schedule={during:copy(o.during),after:copy(o.after)},index=0,warnings=[];
  const rows=[];let totalUncovered=0,uncertainLoan=0;
  for(let i=0;i<end-start;i++){
@@ -94,7 +94,7 @@ function simulate(d){
   const allocation=remaining>0.005?schedule.during:schedule.after;
   const income=retired?n(o.pension):n(o.salary);
   const living=n(o.living)*Math.pow(1+n(o.annualInflation)/100,year);
-  const loanPayment=n(o.loanPayment);
+  const loanPayment=(o.loanEnd&&start+i>mi(o.loanEnd))?0:n(o.loanPayment);
   const addedCard=n(o.visaNew)+n(o.visaFees)+visa*n(o.visaAPR)/1200;
   visa+=addedCard;
   let payVisa=Math.min(visa,n(allocation.visa));visa-=payVisa;
@@ -104,6 +104,11 @@ function simulate(d){
   const out=payVisa+restore+invest+toProjects+toObligations;
   cash+=income-living-loanPayment-out;
   portfolio+=invest;reserve+=toObligations;projects+=toProjects;
+  const modeledReturn=portfolio*(Math.pow(1+n(o.annualReturn)/100,1/12)-1);
+  let profitIntoCash=0;
+  if(o.profitMode==="withdraw"){profitIntoCash=modeledReturn;cash+=modeledReturn}
+  else if(o.profitMode==="hold")profitHold+=modeledReturn;
+  else portfolio+=modeledReturn;
   let goalExpense=0,uncovered=0;
   for(const e of due.get(start+i)||[]){
    let need=e.amount;
@@ -114,11 +119,12 @@ function simulate(d){
   }
   totalUncovered+=uncovered;
   rows.push({month,retired,income,living,loanPayment,payVisa,restore,invest,toProjects,toObligations,visa,remaining,
-    cash,portfolio,reserve,projects,drawAmount,addedCard,goalExpense,uncovered,
+    cash,portfolio,reserve,projects,profitHold,modeledReturn,profitIntoCash,drawAmount,addedCard,goalExpense,uncovered,
     freeFlow:income-living-loanPayment-out,
-    totalLiquid:cash+reserve+projects,overallAssets:cash+reserve+projects+portfolio,stage:remaining>0.005?"إعادة دراهم":"ما بعد إعادة دراهم",newSchedule});
+    totalLiquid:cash+reserve+projects+profitHold,overallAssets:cash+reserve+projects+portfolio+profitHold,stage:remaining>0.005?"إعادة دراهم":"ما بعد إعادة دراهم",newSchedule});
  }
  if(n(o.salary)===0)warnings.push("لا يوجد راتب شهري موثق؛ اضبط الراتب ضمن افتراضات التقاعد.");
+ if(n(o.annualReturn)>0)warnings.push("العائد السنوي على دراهم افتراض اختياري فقط؛ لا يمثل توزيعات أو أرباحًا فعلية مضمونة.");
  if(n(o.pension)===0)warnings.push("المعاش التقاعدي غير محدد؛ قد تبدو سيولة ما بعد التقاعد أقل من الواقع.");
  if(n(o.loanPayment)>0)warnings.push("أقساط القروض تخصم من السيولة دون افتراض انخفاض محدد لأصل الدين؛ راجع مواعيد انتهائها.");
  if(n(o.visaAPR)===0&&a.visa>0)warnings.push("فائدة الفيزا مفترضة صفرًا حتى تدخل معدل التمويل الحقيقي.");
@@ -130,7 +136,7 @@ function field(k,label,value,type,extra){
  return '<label class="form-field"><span>'+esc(label)+'</span><input data-ret="'+esc(k)+'" type="'+(type||"number")+'" '+(type==="number"?'step="any" min="0" inputmode="decimal"':"")+' value="'+esc(value==null?"":value)+'" '+(extra||"")+'></label>';
 }
 function allocationFields(path,ob){
- return fields.map(k=>field(path+"."+k,names[k],n(ob?.[k]))).join("");
+ return fields.filter(k=>!path.endsWith("after")||k!=="restore").map(k=>field(path+"."+k,names[k],n(ob?.[k]))).join("");
 }
 function legend(series){return '<div class="retire-legend">'+series.map(x=>'<span><i style="background:'+esc(colors[x.key]||"#678bdd")+'"></i>'+esc(x.label)+'</span>').join("")+'</div>'}
 function graph(title,subtitle,rows,series){
@@ -158,7 +164,7 @@ function annualRows(rows){
   const end=rs.at(-1),avg=k=>rs.reduce((s,r)=>s+signed(r[k]),0)/rs.length;
   return {label,income:avg("income"),expenses:avg("living"),loanPayment:avg("loanPayment"),payVisa:avg("payVisa"),
    restore:avg("restore"),invest:avg("invest"),toProjects:avg("toProjects"),toObligations:avg("toObligations"),
-   cash:end.cash,reserve:end.reserve,projects:end.projects,portfolio:end.portfolio,visa:end.visa,remaining:end.remaining};
+   cash:end.cash,reserve:end.reserve,projects:end.projects,portfolio:end.portfolio,profitHold:end.profitHold,visa:end.visa,remaining:end.remaining};
  });
 }
 function charts(d){
@@ -227,7 +233,7 @@ function render(d,sub){
 function action(d,action,btn,rootElement,commit){
  const read=k=>rootElement.querySelector('[data-ret="'+k+'"]')?.value;
  const values=prefix=>{
-  const o=defAlloc();for(const k of fields){const v=Number(read(prefix+"."+k));if(!Number.isFinite(v)||v<0)throw Error("أدخل مبلغًا صحيحًا غير سالب لخانة "+names[k]);o[k]=v}return o;
+  const o=defAlloc();for(const k of fields){if(prefix.endsWith("after")&&k==="restore"){o[k]=0;continue}const v=Number(read(prefix+"."+k));if(!Number.isFinite(v)||v<0)throw Error("أدخل مبلغًا صحيحًا غير سالب لخانة "+names[k]);o[k]=v}return o;
  };
  const m=model(d);
  if(action==="ret-save-settings"){
