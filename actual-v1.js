@@ -28,7 +28,7 @@ debts:[["balances","أرصدة الديون"],["payments","السداد المث
 investments:[["darahim","محفظة دراهم"],["profits","الأرباح الفعلية"],["legacy","أرباح دراهم في الميزانيات"]],
 projects:[["list","المشاريع"],["activity","حركات المشاريع"]],
 salary:[["calculator","حاسبة الراتب المسجلة"],["monthly","الرواتب في الميزانيات"]],
-forecast:[["visa","الفيزا مقابل دراهم"],["liquidity","السيولة قبل التقاعد وبعده"]],
+forecast:[["charts","الرسوم البيانية"],["allocations","التوزيع الشهري"],["draws","سحوبات دراهم"],["method","طريقة الحساب"]],
 charts:[["expenses","المصروف حسب البند"],["spending","المصروف الكامل"],["accounts","أرصدة الحسابات"],["projects","المشاريع"],["obligations","الالتزامات"],["debts","الديون"],["darahim","دراهم"],["monthly","حركة ١٢ شهرًا"]],
 data:[["backup","النسخ والاستيراد"],["inspect","ملخص بيانات الاستيراد"],["about","طريقة الحساب"]]
 };
@@ -377,7 +377,7 @@ function render(){
  $("viewHeading").textContent=choices.find(x=>x[0]===sub)[1];
  $("quickAction").style.display=["charts","forecast"].includes(page)?"none":"";
  $("quickAction").textContent=["accounts","moves","debts"].includes(page)?"＋ لصق رسالة":"＋ حركة جديدة";
- let html=page==="home"?contentHome():page==="accounts"?contentAccounts():page==="budget"?contentBudget():page==="moves"?contentMoves():page==="obligations"?contentObligations():page==="debts"?contentDebts():page==="investments"?contentInvestment():page==="projects"?contentProjects():page==="salary"?contentSalary():page==="forecast"?window.FinanceForecast.render(data,sub):page==="charts"?contentChart():contentData();
+ let html=page==="home"?contentHome():page==="accounts"?contentAccounts():page==="budget"?contentBudget():page==="moves"?contentMoves():page==="obligations"?contentObligations():page==="debts"?contentDebts():page==="investments"?contentInvestment():page==="projects"?contentProjects():page==="salary"?contentSalary():page==="forecast"?(window.RetirementApp?.render(data,sub)||blank("وحدة التقاعد غير متاحة")):page==="charts"?contentChart():contentData();
  $("content").innerHTML=html;
  $("storageStatus").textContent=data.moves.length+" حركة مسجلة • "+data.accounts.length+" حساب"+(data.legacy?.bankHistoryCount?" • "+data.legacy.bankHistoryCount+" تاريخية":"");
 }
@@ -612,6 +612,11 @@ $("content").addEventListener("click",e=>{
   keep();return;
  }
  if(action==="openSms"){sub="paste";smsDraft=null;smsStatus="";render();return;}
+ if(action.startsWith("ret-")){
+  try{if(window.RetirementApp?.action(data,action,target,$("content"),keep))return;}
+  catch(err){alert("تعذر تحديث التقاعد: "+err.message)}
+  return;
+ }
  if(action==="analyzeSms"){try{analyzeSMS()}catch(err){alert(err.message)}return;}
  if(action==="saveSms"){try{saveSMS()}catch(err){alert(err.message)}return;}
  if(action==="clearSms"){smsDraft=null;smsStatus="";render();return;}
