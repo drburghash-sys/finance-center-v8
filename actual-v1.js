@@ -83,7 +83,7 @@ function contentBudget(){
  data.moves.filter(m=>m.date.slice(0,7)===period&&(m.kind==="expense"||m.kind==="charge")).forEach(m=>{const k=m.category||"أخرى";categories[k]=(categories[k]||0)+num(m.amount)});
  const metrics=stats([box("بنود مخططة للشهر",planned,"تتضمن تحويل الادخار إن وجد","blue"),box("منها ادخار مخطط",saved,"ليس مصروفًا فعليًا","violet"),box("المصروف الفعلي",expenseM(),"من الحركات المسجلة","coral")]);
  if(sub==="categories")return metrics+panel("المصروفات المنفذة حسب البند",bars(Object.entries(categories).sort((a,b)=>b[1]-a[1]),"تم احتساب الصرف من عمليات فعلية فقط"));
- return metrics+panel("بنود ميزانية "+period,entryList(items.map(x=>({title:x.name,subtitle:x.type==="saving"?"ادخار مخطط — لا يصنف كمصروف":x.type==="debt"?"سداد دين مخطط":"مصروف مخطط",value:money(x.amount),tag:x.type==="saving"?"ادخار":"خطة",actions:actions("Budget",x.id)})),"لم تُنشأ ميزانية لهذا الشهر"),button("إضافة بند","newBudget",null,"primary"))+
+ return metrics+panel("بنود ميزانية "+period,entryList(items.map(x=>({title:x.name,subtitle:x.type==="saving"?"ادخار مخطط — لا يصنف كمصروف":x.type==="debt"?"سداد دين مخطط":"مصروف مخطط",value:money(x.amount),tag:x.type==="saving"?"ادخار":"خطة",actions:actions("Budget",x.id)})),"لم تُنشأ ميزانية لهذا الشهر"),button("إضافة بند","newBudget",null,"primary")+button("نسخ بنود الشهر السابق","copyPrevBudget",null,"outline"))+
  panel("التنفيذ الفعلي",entryList([{title:"مصروفات فعلية",value:money(expenseM())},{title:"سداد ديون من البنك",value:money(paidM())},{title:"ادخار محوّل بالفعل",value:money(total(movements().filter(m=>m.kind==="transfer"&&acc(m.to)?.role==="reserve")))}]));
 }
 function moveName(m){return ({income:"دخل",expense:"مصروف",transfer:"تحويل بين حسابين",repayment:"سداد دين",charge:"شراء بالفيزا",profit:"ربح استثماري"})[m.kind]||"حركة"}
@@ -366,6 +366,14 @@ $("content").addEventListener("click",e=>{
  if(action.startsWith("delete")){
   try{removeRecord(action.slice(6),target.dataset.id)}catch(err){alert(err.message)}
   return;
+ }
+ if(action==="copyPrevBudget"){
+  const prev=changeMonth(period,"prev"),items=data.budget.filter(x=>x.month===prev);
+  if(data.budget.some(x=>x.month===period)){alert("الشهر الحالي يحتوي بنودًا بالفعل. لن أكررها.");return;}
+  if(!items.length){alert("لم أجد بنود ميزانية في "+prev+" لنسخها.");return;}
+  if(!confirm("نسخ "+items.length+" بند من "+prev+" إلى "+period+"؟ لن تُنشأ حركات دفع أو تحويلات فعلية."))return;
+  items.forEach(x=>data.budget.push({...x,id:uid(),month:period}));
+  keep();return;
  }
  if(action==="goData"){page="data";sub="backup";render();return;}
  if(action==="export"){download();return;}
