@@ -77,8 +77,8 @@ function parse(raw,data){
  else if(transfer)kind="transfer";
  else if(incoming)kind="income";
  else if(bill||isPurchase||withdrawal)kind="expense";
- else if(outgoing)kind="transfer";
- if(kind==="unclassified"&&rule){kind=({incoming:"income",outgoing:"transfer",purchase:"expense",withdrawal:"expense",bill:"expense",moi:"expense",transfer:"transfer"})[rule.type]||kind;}
+ else if(outgoing)kind="expense";
+ if(kind==="unclassified"&&rule){kind=({incoming:"income",outgoing:"expense",purchase:"expense",withdrawal:"expense",bill:"expense",moi:"expense",transfer:"transfer"})[rule.type]||kind;}
  const selected=new Set();
  for(const id of ids){for(const a of byDigit(all,id,"card"))selected.add(a.id)}
  const isBankAccount=x=>x&&x.role==="bank"||x?.role==="reserve";
@@ -100,6 +100,7 @@ function parse(raw,data){
   const candidates=[...selected].map(id=>all.find(x=>x.id===id)).filter(isBankAccount);
   if(!from&&candidates.length===1)from=candidates[0].id;
  }
+ if(kind==="expense"&&outgoing&&from&&to&&from!==to)kind="transfer";
  if(kind==="transfer"&&!from&&!to){
   const scoped=[...selected].map(id=>all.find(x=>x.id===id)).filter(isBankAccount);
   if(scoped.length===1){if(outgoing)from=scoped[0].id;else if(incoming)to=scoped[0].id}
@@ -107,7 +108,7 @@ function parse(raw,data){
  let merchant=(t.match(/(?:لدى|من\s+(?!حساب))\s*[:：]\s*([^،\n]+?)(?=\s+في[:\s]|$)/i)||[])[1]||"";
  if(!merchant)merchant=(t.match(/(?:لدى|at)\s*[:：]?\s*([a-zA-Z\u0600-\u06FF0-9 \-]{3,35})/i)||[])[1]||"";
  merchant=merchant.trim().slice(0,70);
- const category=kind==="charge"?"مشتريات فيزا":kind==="expense"?merchant||"مشتريات بنكية":kind==="repayment"?"سداد فيزا":kind==="income"?"حوالة واردة":kind==="profit"?"أرباح دراهم":kind==="transfer"?"تحويل بين الحسابات":"غير مصنف";
+ const category=kind==="charge"?"مشتريات فيزا":kind==="expense"?(outgoing?"حوالة صادرة":merchant||"مشتريات بنكية"):kind==="repayment"?"سداد فيزا":kind==="income"?"حوالة واردة":kind==="profit"?"أرباح دراهم":kind==="transfer"?"تحويل بين الحسابات":"غير مصنف";
  return{raw:String(raw||""),normalized:t,hash:hash(t),learnedRule:rule?.key||"",date:parseDate(raw),kind,amount:a,from,to,debtId:d?.id||"",cardDigits:ids,accountDigits:[debitId,creditId].filter(Boolean),category,principal:0,confidence:kind!=="unclassified"&&!!a?(kind==="charge"||kind==="repayment"?!!d:true):false,reason:rejected?"العملية مرفوضة؛ لا تُخصم من الأرصدة":kind==="unclassified"?"تعذر تحديد نوع العملية. اختر نوعها وحسابها قبل الحفظ":!a?"لم أستطع تحديد المبلغ":kind==="transfer"&&(!from||!to)?"اختر طرفي التحويل قبل التسجيل":kind==="repayment"&&!from?"حدّد هل خصم السداد البنكي مسجل مسبقًا":"راجع التفاصيل قبل التسجيل"};
 }
 root.BankSMS={parse,normalize:tidy,hash,amount,cards};
