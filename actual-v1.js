@@ -23,10 +23,10 @@ home:[["summary","ملخص اليوم"],["recent","آخر الحركات"]],
 accounts:[["balances","الأرصدة بحسب البنك"],["funding","تأكيد تحويلات الحسابات"],["transfers","التحويلات"],["paste","لصق رسالة البنك"]],
 budget:[["month","ميزانية الشهر"],["categories","المصروفات الفعلية"],["history","الأشهر السابقة"]],
 moves:[["ledger","سجل الحركات"],["income","الإيرادات"],["spend","المصروفات"],["paste","إدخال من رسالة"]],
-obligations:[["reserve","حساب الادخار"],["due","الاستحقاقات"],["catalog","إدارة المواعيد"],["paid","المدفوع فعليًا"]],
+obligations:[["reserve","حساب الادخار"],["due","الاستحقاقات"],["forecast","تنبؤ تغطية الاستحقاقات"],["catalog","إدارة المواعيد"],["paid","المدفوع فعليًا"]],
 debts:[["balances","أرصدة الديون"],["payments","السداد المثبت"],["paste","لصق رسالة الفيزا"],["history","سجلات الفيزا المستوردة"]],
 investments:[["darahim","محفظة دراهم"],["profits","الأرباح الفعلية"],["legacy","أرباح دراهم في الميزانيات"]],
-projects:[["list","المشاريع"],["activity","حركات المشاريع"]],
+projects:[["list","المشاريع"],["forecasts","الأرباح المتوقعة"],["activity","حركات المشاريع"]],
 salary:[["calculator","حاسبة الراتب المسجلة"],["monthly","الرواتب في الميزانيات"]],
 forecast:[["charts","الرسوم البيانية"],["allocations","التوزيع الشهري"],["draws","سحوبات دراهم"],["method","طريقة الحساب"]],
 charts:[["expenses","المصروف حسب البند"],["spending","المصروف الكامل"],["accounts","أرصدة الحسابات"],["projects","المشاريع"],["obligations","الالتزامات"],["debts","الديون"],["darahim","دراهم"],["monthly","حركة ١٢ شهرًا"]],
@@ -346,6 +346,7 @@ function dueItems(){
  return rows.sort((a,b)=>a.date.localeCompare(b.date));
 }
 function contentObligations(){
+ if(sub==="forecast")return window.ObligationForecast?window.ObligationForecast.view(data,{dues:dueItems(),now:month()}):panel("التنبؤ",blank("تعذر تحميل وحدة التنبؤ"));
  const isReserve=reserves().length>0;
  if(sub==="reserve"){
  const transfers=data.moves.filter(x=>x.kind==="transfer"&&acc(x.to)?.role==="reserve");
@@ -367,6 +368,7 @@ function contentObligations(){
  const due=dueItems().filter(x=>x.rest>0&&x.date>=period).slice(0,50);
  const near=due.filter(x=>x.date<=addMonths(period,12)),amount=total(near,x=>x.rest);
  return stats([box("رصيد ادخار متاح اليوم",reserveCash(),"يمكن أن يستعمل للمدارس والسيارة والصيانة","violet"),box("استحقاقات ١٢ شهرًا",amount,"مواعيد مخططة، لم تُدفع بعد","amber")])+
+ (window.ObligationForecast?window.ObligationForecast.summary(data,{dues:dueItems(),now:month()}):"")+
  panel("الاستحقاقات المسجلة",entryList(due.slice(0,25).map(x=>({title:x.name,subtitle:"استحقاق "+x.date+" • المدفوع فعليًا "+money(x.paid),value:money(x.rest),tag:x.date<month()?"متأخر":x.date===month()?"هذا الشهر":"مخطط",tagType:x.date<month()?"warn":""})),"لا توجد استحقاقات مفتوحة"),button("إضافة التزام","newCommitment",null,"primary"))+
  '<p class="body-note">المبالغ هنا ليست توقع عجز: إنما قيمة استحقاقات مخططة لم تُسدَّد بعد. رصيد الادخار يختلف عن تكلفة الاستحقاقات، ولا نجمعهما كأنه دخل جديد.</p>';
 }
@@ -404,13 +406,26 @@ function contentSalary(){
 
 function contentProjects(){
  if(sub==="activity"){
- const arr=data.moves.filter(x=>x.projectId&&x.date.slice(0,7)===period);
- return panel("حركات المشاريع في "+period,entryList(arr.map(x=>({title:project(x.projectId)?.name||"مشروع",subtitle:x.date+" • "+moveName(x),value:money(x.amount),actions:actions("Move",x.id)})),"لا توجد حركة مشروع في هذا الشهر"),button("إضافة حركة مشروع","newMove",null,"primary"));
+  const arr=data.moves.filter(x=>x.projectId&&x.date.slice(0,7)===period);
+  return panel("حركات المشاريع في "+period,entryList(arr.map(x=>({title:project(x.projectId)?.name||"مشروع",subtitle:x.date+" • "+moveName(x),value:money(x.amount),actions:actions("Move",x.id)})),"لا توجد حركة مشروع في هذا الشهر"),button("إضافة حركة مشروع","newMove",null,"primary"));
+ }
+ if(sub==="forecasts"){
+  return panel("خطط أرباح المشاريع",entryList(data.projects.map(p=>({
+    title:p.name,
+    subtitle:(p.forecastEnabled?"التنبؤ مفعل":"التنبؤ غير مفعل")+" • "+(p.profitStart||"بدون تاريخ")+" • "+(Number(p.profitInterval)===0?"دفعة واحدة":!p.profitInterval?"غير محدد":"كل "+p.profitInterval+" شهر"),
+    value:"ربح صافي "+money(p.expectedNetProfit||0)+" • للالتزامات "+money(p.profitToObligations||0),
+    actions:button("ضبط الأرباح","editProject",p.id,"outline")
+  })),"لا توجد مشاريع؛ أضف مشروعًا أولًا"),button("إضافة مشروع","newProject",null,"primary"))+
+  '<p class="body-note">هذه مبالغ متوقعة وليست إيرادات حدثت بالفعل. تحدد ربح كل مشروع بعد المصروفات، ثم المبلغ الذي يذهب منه إلى حساب الالتزامات. إذا كان هذا المبلغ داخل ادخار الميزانية بالفعل، فعّل خيار «محتسب في الميزانية» لتجنب إضافته مرتين.</p>'+
+  '<div class="buttons">'+button("تنبؤ استحقاقات المدارس والسيارة","showObligationForecast",null,"primary")+'</div>';
  }
  return panel("المشاريع المسجلة",entryList(data.projects.map(p=>{
- const tx=data.moves.filter(x=>x.projectId===p.id),income=total(tx.filter(x=>x.kind==="income")),out=total(tx.filter(x=>x.kind==="expense"));
- return {title:p.name,subtitle:"دخل فعلي "+money(income)+" • مصروف فعلي "+money(out),value:"الصافي "+money(income-out),actions:actions("Project",p.id)};}),"لا توجد مشاريع مُسجّلة"),button("إضافة مشروع","newProject",null,"primary"))+
- '<p class="body-note">لا يدخل دخل مشروع محتمل أو مستقبلي هنا. الأرباح فقط من حركات الدخل والمصروف التي سجلتها بالفعل.</p>';
+  const tx=data.moves.filter(x=>x.projectId===p.id),income=total(tx.filter(x=>x.kind==="income")),out=total(tx.filter(x=>x.kind==="expense"));
+  return {title:p.name,subtitle:"دخل فعلي "+money(income)+" • مصروف فعلي "+money(out)+
+   (p.forecastEnabled?" • الربح المتوقع "+money(p.expectedNetProfit||0)+" / المخصص للالتزامات "+money(p.profitToObligations||0):" • لا توجد أرباح متوقعة مفعّلة"),
+   value:"الصافي الفعلي "+money(income-out),actions:actions("Project",p.id)};}),"لا توجد مشاريع مُسجّلة"),button("إضافة مشروع","newProject",null,"primary")+
+ button("إعداد أرباح المشاريع","projectForecasts",null,"outline"))+
+ '<p class="body-note">الأرباح الفعلية من الحركات المسجلة فقط. الأرباح المتوقعة تظهر منفصلة في «الأرباح المتوقعة»، ولا تضاف إلى البنك إلا إذا أدخلت حركة مالية حقيقية.</p>';
 }
 function bars(entries,hint){
  if(!entries.length)return blank("لا توجد بيانات فعلية لهذا الرسم بعد");
@@ -469,9 +484,18 @@ function editor(kind,id){
  else if(kind==="budgetSalary"){title="تعديل الراتب المخطط لشهر "+period;inner=field("الشهر","month",period,"month","readonly")+field("الراتب المخطط","salary",incomePlanForMonth(period).salary,"number","required");}
  else if(kind==="budgetIncome"){title=editingId?"تعديل دخل إضافي":"إضافة دخل آخر";inner=field("الشهر","month",period,"month","readonly")+field("مصدر الدخل (مثال: أرباح دراهم)","name","","text","required")+field("المبلغ المتوقع لهذا الشهر","amount","","number","required");}
  else if(kind==="budget"){title="إضافة بند ميزانية";inner=field("الشهر","month",period,"month","required")+field("اسم البند","name","","text","required")+field("المخصص للشهر","amount","","number","required")+select("نوع التخصيص","type",[["expense","مصروف مخطط"],["debt","قسط دين مخطط"],["saving","تحويل ادخار للالتزامات"],["investment","استثمار مخطط"]],"expense")+select("البنك / الحساب المخصص لتنفيذ هذا البند","bankAccountId",data.accounts.filter(a=>a.role==="bank"||a.role==="reserve"||a.role==="investment").map(a=>[a.id,bankGroup(a)+" — "+a.name]),"","غير محدد (يرجى الاختيار)");}
- else if(kind==="commitment"){title="تسجيل موعد التزام";inner=field("الالتزام (رسوم مدرسة / سيارة / صيانة)","name","","text","required")+field("شهر أول استحقاق","firstMonth",period,"month","required")+amount+field("عدد الدفعات","count","1","number","required")+field("الفاصل بين الدفعات بالأشهر","interval","1","number","required");}
+ else if(kind==="commitment"){title="تسجيل موعد التزام";inner=field("الالتزام (رسوم مدرسة / سيارة / صيانة)","name","","text","required")+field("شهر أول استحقاق","firstMonth",period,"month","required")+amount+field("عدد الدفعات","count","1","number","required")+field("الفاصل بين الدفعات بالأشهر","interval","1","number","required")+select("هل يُغطّى هذا الاستحقاق من حساب الالتزامات؟","useObligations",[["yes","نعم — من حساب الالتزامات"],["no","لا — من مصدر آخر"]],"yes");}
  else if(kind==="debt"){title="إضافة رصيد دين حقيقي";inner=field("اسم الدين","name","","text","required")+field("الرصيد الحالي من كشف البنك","opening","","number","required")+field("تاريخ الرصيد","asOf",now(),"date")+field("آخر ٤ أرقام لبطاقة الفيزا","cardLast4")+select("النوع","kind",[["loan","قرض بنكي"],["credit","بطاقة فيزا"]],"loan");}
- else if(kind==="project"){title="إضافة مشروع";inner=field("اسم المشروع","name","","text","required")+field("وصف اختياري","description");}
+ else if(kind==="project"){title=editingId?"تعديل المشروع وأرباحه":"إضافة مشروع";inner=field("اسم المشروع","name","","text","required")+field("وصف اختياري","description")+
+  '<div class="form-section-note">**الأرباح المتوقعة — لا تُسجل كدخل بنكي فعلي**</div>'+
+  select("إدخال أرباح المشروع في التنبؤ؟","forecastEnabled",[["false","لا — حتى تبدأ الخطة"],["true","نعم — أدرج الأرباح المتوقعة"]],"false")+
+  field("صافي الربح المتوقع لكل دفعة (بالريال)","expectedNetProfit","0","number")+
+  field("أول شهر متوقع لاستلام الأرباح","profitStart",changeMonth(month(),"next"),"month")+
+  select("تكرار الأرباح","profitInterval",[["1","شهريًا"],["3","كل ٣ أشهر"],["6","كل ٦ أشهر"],["12","سنويًا"],["0","مرة واحدة فقط"]],"1")+
+  field("عدد الدفعات (٠ = تستمر حتى نهاية التنبؤ)","profitCount","0","number")+
+  field("الريالات المخصصة من كل دفعة لحساب الالتزامات","profitToObligations","0","number")+
+  select("هل مبلغ الالتزامات من المشروع داخل ادخار الميزانية بالفعل؟","profitInBudget",[["false","لا — مبلغ إضافي للالتزامات"],["true","نعم — لا تكرر احتسابه"]],"false")+
+  '<p class="hint">الربح الصافي بعد تكاليف المشروع، والمبلغ المخصص للالتزامات لا يجوز أن يتجاوز الربح. لا تضف الربح إلى مصروفات الميزانية؛ إن كان مدرجًا بالدخل الإضافي سنستبعد تكراره من توقع الالتزامات.</p>';}
  else {
   const kinds=[["income","دخل"],["expense","مصروف فعلي"],["transfer","تحويل بين حسابين"],["repayment","سداد قرض أو فيزا"],["charge","شراء بالفيزا"],["profit","ربح دراهم مستلم"]];
   title="تسجيل حركة حقيقية";
@@ -496,7 +520,11 @@ function editor(kind,id){
  $("editorForm").innerHTML='<div class="form-grid">'+inner+'</div><div class="modal-footer"><button type="button" class="button outline" data-action="close">إلغاء</button><button class="button primary" type="submit">حفظ</button></div>';
  if(editingId){
   const source=kind==="budgetIncome"?incomePlanForMonth(period).lines.find(x=>x.id===editingId):kind==="account"?acc(editingId):kind==="budget"?data.budget.find(x=>x.id===editingId):kind==="commitment"?data.commitments.find(x=>x.id===editingId):kind==="debt"?debt(editingId):kind==="project"?project(editingId):data.moves.find(x=>x.id===editingId);
-  if(source)$("editorForm").querySelectorAll("[name]").forEach(el=>{if(el.name==="cardsText")el.value=(source.cards||[]).join(", ");else if(el.name==="bankAccountId"&&kind==="budget")el.value=linkedAccount(source)?.id||"";else if(source[el.name]!=null)el.value=source[el.name]});
+  if(source)$("editorForm").querySelectorAll("[name]").forEach(el=>{if(el.name==="cardsText")el.value=(source.cards||[]).join(", ");else if(el.name==="bankAccountId"&&kind==="budget")el.value=linkedAccount(source)?.id||"";
+   else if(el.name==="forecastEnabled"&&kind==="project")el.value=String(!!source.forecastEnabled);
+   else if(el.name==="profitInBudget"&&kind==="project")el.value=String(!!source.profitInBudget);
+   else if(el.name==="useObligations"&&kind==="commitment")el.value=String(source.obligationFundingExplicit?!!source.useObligations:/مدرس|تعليم|جامع|رسوم|سيار|صيان|مركب|فحص|تأمين|مركبة/i.test(source.name||"")||source.useObligations===true)==="true"?"yes":"no";
+   else if(source[el.name]!=null)el.value=source[el.name]});
  }
  $("dialog").hidden=false;$("dialog").setAttribute("aria-hidden","false");
 }
@@ -535,9 +563,15 @@ function saveForm(form){
    storeRecord("budget",{id:uid(),month:v.month,name:v.name.trim(),amount,type:v.type,bankAccountId,paid:old?(changed?false:!!old.paid):false});
    period=v.month;
  }
- else if(kind==="commitment"){if(!v.name.trim()||!v.firstMonth)throw Error("أكمل موعد الاستحقاق");storeRecord("commitments",{id:uid(),name:v.name.trim(),firstMonth:v.firstMonth,amount:num(v.amount),count:Math.min(240,Math.max(1,Number(v.count)||1)),interval:Math.min(120,Math.max(1,Number(v.interval)||1)),active:editingId?(data.commitments.find(x=>x.id===editingId)?.active!==false):true});}
+ else if(kind==="commitment"){if(!v.name.trim()||!v.firstMonth)throw Error("أكمل موعد الاستحقاق");storeRecord("commitments",{id:uid(),name:v.name.trim(),firstMonth:v.firstMonth,amount:num(v.amount),count:Math.min(240,Math.max(1,Number(v.count)||1)),interval:Math.min(120,Math.max(1,Number(v.interval)||1)),useObligations:v.useObligations==="yes",obligationFundingExplicit:true,active:editingId?(data.commitments.find(x=>x.id===editingId)?.active!==false):true});}
  else if(kind==="debt"){if(!v.name.trim())throw Error("أدخل اسم الدين");storeRecord("debts",{id:uid(),name:v.name.trim(),opening:num(v.opening),kind:v.kind,asOf:v.asOf||now(),cardLast4:String(v.cardLast4||"").replace(/\D/g,"").slice(-4),source:"manual"});}
- else if(kind==="project"){if(!v.name.trim())throw Error("أدخل اسم المشروع");storeRecord("projects",{id:uid(),name:v.name.trim(),description:v.description||""});}
+ else if(kind==="project"){
+  const name=String(v.name||"").trim(),net=Number(v.expectedNetProfit||0),alloc=Number(v.profitToObligations||0),count=Number(v.profitCount||0),interval=Number(v.profitInterval);
+  if(!name)throw Error("أدخل اسم المشروع");
+  if(![net,alloc,count,interval].every(Number.isFinite)||net<0||alloc<0||alloc>net||count<0||!Number.isInteger(count)||count>240||![0,1,3,6,12].includes(interval))throw Error("راجع الربح الصافي والمبلغ المخصص للالتزامات وتكرار الدفعات. المبلغ المخصص لا يمكن أن يزيد على الربح.");
+  if(v.forecastEnabled==="true"&&(net<=0||!/^20[0-9]{2}-(0[1-9]|1[0-2])$/.test(v.profitStart)))throw Error("لتفعيل التنبؤ أدخل صافي ربح موجبًا وشهر البداية الصحيح");
+  storeRecord("projects",{id:uid(),name,description:v.description||"",expectedNetProfit:net,profitStart:v.profitStart||"",profitInterval:interval,profitCount:count,profitToObligations:alloc,profitInBudget:v.profitInBudget==="true",forecastEnabled:v.forecastEnabled==="true"});
+}
  else{
   const m={id:uid(),date:v.date||now(),kind:v.kind,amount:Number(v.amount),from:v.from||"",to:v.to||"",debtId:v.debtId||"",category:(v.category||"").trim(),note:v.note||"",commitmentKey:v.commitmentKey||"",projectId:v.projectId||"",principal:num(v.principal),posted:true};
   if(!(m.amount>0)&&Number.isFinite(m.amount))throw Error("المبلغ يجب أن يكون أكبر من صفر");
@@ -656,11 +690,21 @@ $("quickAction").addEventListener("click",()=>{
 $("content").addEventListener("change",e=>{
  if(e.target.id==="fundBank"){bankPick=e.target.value;accountPick="";render();}
  else if(e.target.id==="fundAccount"){accountPick=e.target.value;render();}
+ else if(e.target.id==="obligationForecastBase"){
+  if(!data.obligationForecast)data.obligationForecast={};
+  data.obligationForecast.referenceMonth=e.target.value;keep();
+ }
+ else if(e.target.id==="obligationForecastMonths"){
+  if(!data.obligationForecast)data.obligationForecast={};
+  data.obligationForecast.months=Number(e.target.value)||120;keep();
+ }
 });
 $("content").addEventListener("click",e=>{
  const target=e.target.closest("[data-action]");if(!target)return;
  const action=target.dataset.action;
  const m={newAccount:"account",newBudget:"budget",newCommitment:"commitment",newDebt:"debt",newProject:"project",newInvestmentAccount:"account",newMove:"expense",newExpense:"expense",newTransfer:"transfer",newRepayment:"repayment",newProfit:"profit"};
+ if(action==="showObligationForecast"){page="obligations";sub="forecast";render();return;}
+ if(action==="projectForecasts"){page="projects";sub="forecasts";render();return;}
  if(action==="newInvestmentAccount"){editor("account");const role=$("editorForm").querySelector('[name="role"]');if(role)role.value="investment";return;}
  if(m[action]){editor(m[action]);return;}
  if(action==="saveForecast"){
