@@ -371,7 +371,7 @@ function render(){
  if(!nav[page])page="home";
  const choices=nav[page];if(!choices.some(x=>x[0]===sub))sub=choices[0][0];
  $("pageNav").value=page;$("subNav").innerHTML=options(choices,sub);
- $("monthNav").value=period;$("periodBox").style.display=["budget","moves","charts"].includes(page)||(page==="obligations"&&sub==="due")||(page==="projects"&&sub==="activity")?"":"none";
+ $("monthNav").value=period;$("periodBox").style.display=["budget","moves","charts"].includes(page)||(page==="accounts"&&sub==="funding")||(page==="obligations"&&sub==="due")||(page==="projects"&&sub==="activity")?"":"none";
  $("pageHeading").textContent=titles[page];
  $("viewHeading").textContent=choices.find(x=>x[0]===sub)[1];
  $("quickAction").style.display=["charts","forecast"].includes(page)?"none":"";
