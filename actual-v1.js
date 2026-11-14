@@ -53,6 +53,7 @@ const monthKey=d=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
 const changeMonth=(m,v)=>{const[y,x]=m.split("-").map(Number);if(v==="prev")return monthKey(new Date(y,x-2,1));if(v==="next")return monthKey(new Date(y,x,1));return m};
 function keep(){localStorage.setItem(KEY,JSON.stringify(data));render();}
 function box(title,value,hint,accent){return '<div class="metric '+(accent||'')+'"><div class="metric-label">'+esc(title)+'</div><strong>'+money(value)+'</strong><small>'+esc(hint||"")+'</small></div>'}
+function countBox(title,value,hint,accent){return '<div class="metric '+(accent||'')+'"><div class="metric-label">'+esc(title)+'</div><strong>'+Number(value).toLocaleString('ar-SA')+'</strong><small>'+esc(hint||'')+'</small></div>'}
 function panel(title,body,action){return '<section class="panel"><div class="panel-top"><h2>'+esc(title)+'</h2>'+(action||"")+'</div>'+body+'</section>'}
 function blank(txt){return '<div class="empty">'+esc(txt||"لا توجد حركات مسجلة بعد")+'</div>'}
 function pill(txt,type){return '<span class="pill '+(type||"")+'">'+esc(txt)+'</span>'}
@@ -243,7 +244,7 @@ function contentAccountFunding(){
   const active=g.children.filter(a=>fundedItems(a).length),complete=active.length>0&&active.every(isAccountConfirmed);
   return {title:g.name,subtitle:active.length+" حسابات مخصصة • "+active.filter(isAccountConfirmed).length+" مؤكد",value:money(g.children.reduce((z,a)=>z+fundedAmount(a),0)),tag:complete?"مكتمل":active.length?"قيد التأكيد":"لا بنود",tagType:complete?"done":"warn"};
  });
- return stats([box("البنوك المكتملة",completed,"من "+groups.length+" بنوك","violet"),box("حسابات مؤكدة",data.accounts.filter(isAccountConfirmed).length,"من "+data.accounts.length+" حساب","blue")])+
+ return stats([countBox("البنوك المكتملة",completed,"من "+groups.length+" بنوك","violet"),countBox("حسابات مؤكدة",data.accounts.filter(isAccountConfirmed).length,"من "+data.accounts.length+" حساب","blue")])+
  panel("تأكيد تحويلات "+period,selector+bankBanner+acct+
  '<div class="buttons">'+button(allDone?"إلغاء تأكيد جميع حسابات البنك":"تأكيد جميع حسابات البنك","toggleBankFunding",bankPick,allDone?"outline":"primary")+
  button("إضافة حساب فرعي","newAccount",null,"outline")+button("لصق رسالة بنك","openSms",null,"outline")+'</div>'+oldText+
