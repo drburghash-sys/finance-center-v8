@@ -28,10 +28,11 @@ debts:[["balances","أرصدة الديون"],["payments","السداد المث
 investments:[["darahim","محفظة دراهم"],["profits","الأرباح الفعلية"],["legacy","أرباح دراهم في الميزانيات"]],
 projects:[["list","المشاريع"],["activity","حركات المشاريع"]],
 salary:[["calculator","حاسبة الراتب المسجلة"],["monthly","الرواتب في الميزانيات"]],
+forecast:[["visa","الفيزا مقابل دراهم"],["liquidity","السيولة قبل التقاعد وبعده"]],
 charts:[["expenses","المصروف حسب البند"],["spending","المصروف الكامل"],["accounts","أرصدة الحسابات"],["projects","المشاريع"],["obligations","الالتزامات"],["debts","الديون"],["darahim","دراهم"],["monthly","حركة ١٢ شهرًا"]],
 data:[["backup","النسخ والاستيراد"],["inspect","ملخص بيانات الاستيراد"],["about","طريقة الحساب"]]
 };
-const titles={home:"لوحة الواقع",accounts:"الحسابات",budget:"الميزانية",moves:"الحركات",obligations:"الالتزامات",debts:"الديون",investments:"دراهم",projects:"المشاريع",salary:"الراتب",charts:"الرسوم البيانية",data:"البيانات"};
+const titles={home:"لوحة الواقع",accounts:"الحسابات",budget:"الميزانية",moves:"الحركات",obligations:"الالتزامات",debts:"الديون",investments:"دراهم",projects:"المشاريع",salary:"الراتب",forecast:"التوقعات والتقاعد",charts:"الرسوم البيانية",data:"البيانات"};
 const acc=id=>data.accounts.find(x=>x.id===id);
 const debt=id=>data.debts.find(x=>x.id===id);
 const project=id=>data.projects.find(x=>x.id===id);
@@ -372,9 +373,9 @@ function render(){
  $("monthNav").value=period;$("periodBox").style.display=["budget","moves","charts"].includes(page)||(page==="obligations"&&sub==="due")||(page==="projects"&&sub==="activity")?"":"none";
  $("pageHeading").textContent=titles[page];
  $("viewHeading").textContent=choices.find(x=>x[0]===sub)[1];
- $("quickAction").style.display=page==="charts"?"none":"";
+ $("quickAction").style.display=["charts","forecast"].includes(page)?"none":"";
  $("quickAction").textContent=["accounts","moves","debts"].includes(page)?"＋ لصق رسالة":"＋ حركة جديدة";
- let html=page==="home"?contentHome():page==="accounts"?contentAccounts():page==="budget"?contentBudget():page==="moves"?contentMoves():page==="obligations"?contentObligations():page==="debts"?contentDebts():page==="investments"?contentInvestment():page==="projects"?contentProjects():page==="salary"?contentSalary():page==="charts"?contentChart():contentData();
+ let html=page==="home"?contentHome():page==="accounts"?contentAccounts():page==="budget"?contentBudget():page==="moves"?contentMoves():page==="obligations"?contentObligations():page==="debts"?contentDebts():page==="investments"?contentInvestment():page==="projects"?contentProjects():page==="salary"?contentSalary():page==="forecast"?window.FinanceForecast.render(data,sub):page==="charts"?contentChart():contentData();
  $("content").innerHTML=html;
  $("storageStatus").textContent=data.moves.length+" حركة مسجلة • "+data.accounts.length+" حساب"+(data.legacy?.bankHistoryCount?" • "+data.legacy.bankHistoryCount+" تاريخية":"");
 }
@@ -553,6 +554,21 @@ $("content").addEventListener("click",e=>{
  const m={newAccount:"account",newBudget:"budget",newCommitment:"commitment",newDebt:"debt",newProject:"project",newInvestmentAccount:"account",newMove:"expense",newExpense:"expense",newTransfer:"transfer",newRepayment:"repayment",newProfit:"profit"};
  if(action==="newInvestmentAccount"){editor("account");const role=$("editorForm").querySelector('[name="role"]');if(role)role.value="investment";return;}
  if(m[action]){editor(m[action]);return;}
+ if(action==="saveForecast"){
+  const inp=name=>$("content").querySelector('[name="f_'+name+'"]')?.value||"";
+  const current={...(data.forecastOverrides||{})};
+  for(const key of ["retirement","pension","monthlyExpenses","monthlyObligationsSaving","paymentPool","newMonthly","annualNetReturn","horizon"]){
+   const value=inp(key);
+   if(!value)continue;
+   if(key==="retirement"){if(!/^20\d{2}-\d{2}$/.test(value)){alert("تاريخ التقاعد غير صحيح");return;}current[key]=value;}
+   else{const n=Number(value);if(!Number.isFinite(n)||n<0){alert("أدخل قيمة صحيحة للحقل "+key);return;}current[key]=n;}
+  }
+  data.forecastOverrides=current;keep();return;
+ }
+ if(action==="resetForecast"){
+  if(confirm("العودة إلى افتراضات الخطة المستوردة وربط الميزانية الحالية، دون تغيير الحسابات أو الديون؟")){delete data.forecastOverrides;keep();}
+  return;
+ }
  if(action==="toggleBudgetPaid"){
   const x=data.budget.find(x=>x.id===target.dataset.id&&x.month===period);
   if(x){x.paid=!x.paid;keep()}
