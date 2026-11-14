@@ -211,7 +211,7 @@ function contentAccountFunding(){
  const acct='<div class="funding-account '+(account&&isAccountConfirmed(account)?"confirmed":"pending")+'">'+
  (account?'<b>'+esc(account.name)+'</b><small>'+esc(account.bank)+" •••• "+esc(account.last4||"—")+'</small><strong>'+money(accountBalance(account))+'</strong>'+
  '<span class="fund-state">'+(isAccountConfirmed(account)?"✓ تم تأكيد التحويل":"لم يؤكد التحويل بعد")+'</span>'+
- button(isAccountConfirmed(account)?"إلغاء تأكيد هذا الحساب":"تأكيد تحويل هذا الحساب","toggleAccountFunding",account.id,isAccountConfirmed(account)?"outline":"primary"):"")+'</div>';
+ button(isAccountConfirmed(account)?"إلغاء تأكيد هذا الحساب":"تأكيد تحويل هذا الحساب","toggleAccountFunding",account.id,isAccountConfirmed(account)?"outline":"primary")+button("تعديل الحساب الفرعي","editAccount",account.id,"outline"):"")+'</div>';
  const oldText=matching.length?'<p class="hint">من ميزانية V8 القديمة: '+matching.map(x=>esc(x.name)+" — "+(x.confirmed?"تم تأكيد المجموعة":"لم تؤكد المجموعة")).join(" • ")+'</p>':"";
  const names=groups.map(g=>({title:g.name,subtitle:g.children.length+" حساب فرعي • "+g.children.filter(isAccountConfirmed).length+" مؤكد",value:g.children.every(isAccountConfirmed)?"✓ مكتمل":"غير مكتمل",tag:g.children.every(isAccountConfirmed)?"مكتمل":"قيد التأكيد",tagType:g.children.every(isAccountConfirmed)?"done":"warn"}));
  return stats([box("البنوك المكتملة",completed,"من "+groups.length+" بنوك","violet"),box("حسابات مؤكدة",data.accounts.filter(isAccountConfirmed).length,"من "+data.accounts.length+" حساب","blue")])+
@@ -372,7 +372,7 @@ function render(){
  if(!nav[page])page="home";
  const choices=nav[page];if(!choices.some(x=>x[0]===sub))sub=choices[0][0];
  $("pageNav").value=page;$("subNav").innerHTML=options(choices,sub);
- $("monthNav").value=period;$("periodBox").style.display=["budget","moves","charts"].includes(page)||(page==="accounts"&&sub==="funding")||(page==="obligations"&&sub==="due")||(page==="projects"&&sub==="activity")?"":"none";
+ $("monthNav").value=period;$("periodBox").style.display=["budget","moves","charts"].includes(page)||(page==="accounts"&&["balances","funding"].includes(sub))||(page==="obligations"&&sub==="due")||(page==="projects"&&sub==="activity")?"":"none";
  $("pageHeading").textContent=titles[page];
  $("viewHeading").textContent=choices.find(x=>x[0]===sub)[1];
  $("quickAction").style.display=["charts","forecast"].includes(page)?"none":"";
