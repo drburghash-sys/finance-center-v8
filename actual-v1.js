@@ -185,7 +185,7 @@ function bankGroup(a){
  if(/دراهم|darahim/.test(t))return"دراهم";
  return String(a.bank||"غير مصنف").trim()||"غير مصنف";
 }
-function bankConfirmations(){return data.confirmations.accounts[period]||(data.confirmations.accounts[period]={})}
+function bankConfirmations(){if(!data.confirmations)data.confirmations={accounts:{},budget:{}};if(!data.confirmations.accounts)data.confirmations.accounts={};return data.confirmations.accounts[period]||(data.confirmations.accounts[period]={})}
 function isAccountConfirmed(a){return bankConfirmations()[a.id]===true}
 function bankGroups(){const names=[...new Set(data.accounts.map(bankGroup))];return names.map(name=>({name,children:data.accounts.filter(x=>bankGroup(x)===name)}))}
 function contentAccountFunding(){
@@ -243,6 +243,7 @@ function contentBudget(){
  button(x.paid?'إلغاء التأكيد':'تأكيد السداد','toggleBudgetPaid',x.id,x.paid?'outline':'primary')+actions("Budget",x.id)+'</div></div>').join('');
  return metrics+stats([box("بنود مؤكدة",paidCount,"من "+items.length+" بندًا","blue"),box("قيمة البنود المؤكدة",total(items.filter(x=>x.paid)),"حالة متابعة من الميزانية فقط","violet")])+
  (data.legacy?.budgetMonths?.[period]?panel("الدخل المخطط حسب النسخة الأصلية",entryList([{title:"الراتب في الميزانية",value:money(data.legacy.budgetMonths[period].salary)},...(data.legacy.budgetMonths[period].incomeLines||[]).map(x=>({title:x.name,value:money(x.amount)}))])):"")+panel("بنود ميزانية "+period,(items.length?'<div class="budget-list">'+budgetRows+"</div>":blank("لم تُنشأ ميزانية لهذا الشهر")),button("إضافة بند","newBudget",null,"primary")+button("نسخ بنود الشهر السابق","copyPrevBudget",null,"outline"))+
+ '<p class="body-note">لون «تم تأكيد السداد» يعكس متابعتك في الميزانية ولا يُخصم مرة أخرى من البنك. لتعديل الرصيد الفعلي سجل عملية بنكية من الحسابات أو عن طريق لصق الرسالة.</p>'+
  panel("التنفيذ الفعلي",entryList([{title:"مصروفات فعلية",value:money(expenseM())},{title:"سداد ديون من البنك",value:money(paidM())},{title:"ادخار محوّل بالفعل",value:money(total(movements().filter(m=>m.kind==="transfer"&&acc(m.to)?.role==="reserve")))}]));
 }
 function moveName(m){return ({income:"دخل",expense:"مصروف",transfer:"تحويل بين حسابين",repayment:"سداد دين",charge:"شراء بالفيزا",profit:"ربح استثماري"})[m.kind]||m.legacyType||"حركة"}
@@ -606,7 +607,7 @@ $("content").addEventListener("click",e=>{
   if(data.budget.some(x=>x.month===period)){alert("الشهر الحالي يحتوي بنودًا بالفعل. لن أكررها.");return;}
   if(!items.length){alert("لم أجد بنود ميزانية في "+prev+" لنسخها.");return;}
   if(!confirm("نسخ "+items.length+" بند من "+prev+" إلى "+period+"؟ لن تُنشأ حركات دفع أو تحويلات فعلية."))return;
-  items.forEach(x=>data.budget.push({...x,id:uid(),month:period}));
+  items.forEach(x=>data.budget.push({...x,id:uid(),month:period,paid:false}));
   keep();return;
  }
  if(action==="openSms"){sub="paste";smsDraft=null;smsStatus="";render();return;}
