@@ -23,12 +23,13 @@ budget:[["month","ميزانية الشهر"],["categories","المصروفات 
 moves:[["ledger","سجل الحركات"],["income","الإيرادات"],["spend","المصروفات"],["paste","إدخال من رسالة"]],
 obligations:[["reserve","حساب الادخار"],["due","الاستحقاقات"],["catalog","إدارة المواعيد"],["paid","المدفوع فعليًا"]],
 debts:[["balances","أرصدة الديون"],["payments","السداد المثبت"],["paste","لصق رسالة الفيزا"],["history","سجلات الفيزا المستوردة"]],
-investments:[["darahim","محفظة دراهم"],["profits","الأرباح الفعلية"]],
+investments:[["darahim","محفظة دراهم"],["profits","الأرباح الفعلية"],["legacy","أرباح دراهم في الميزانيات"]],
 projects:[["list","المشاريع"],["activity","حركات المشاريع"]],
+salary:[["calculator","حاسبة الراتب المسجلة"],["monthly","الرواتب في الميزانيات"]],
 charts:[["expenses","المصروف حسب البند"],["spending","المصروف الكامل"],["accounts","أرصدة الحسابات"],["projects","المشاريع"],["obligations","الالتزامات"],["debts","الديون"],["darahim","دراهم"],["monthly","حركة ١٢ شهرًا"]],
 data:[["backup","النسخ والاستيراد"],["inspect","ملخص بيانات الاستيراد"],["about","طريقة الحساب"]]
 };
-const titles={home:"لوحة الواقع",accounts:"الحسابات",budget:"الميزانية",moves:"الحركات",obligations:"الالتزامات",debts:"الديون",investments:"دراهم",projects:"المشاريع",charts:"الرسوم البيانية",data:"البيانات"};
+const titles={home:"لوحة الواقع",accounts:"الحسابات",budget:"الميزانية",moves:"الحركات",obligations:"الالتزامات",debts:"الديون",investments:"دراهم",projects:"المشاريع",salary:"الراتب",charts:"الرسوم البيانية",data:"البيانات"};
 const acc=id=>data.accounts.find(x=>x.id===id);
 const debt=id=>data.debts.find(x=>x.id===id);
 const project=id=>data.projects.find(x=>x.id===id);
@@ -188,7 +189,7 @@ function contentBudget(){
  data.moves.filter(m=>m.date.slice(0,7)===period&&(m.kind==="expense"||m.kind==="charge")).forEach(m=>{const k=m.category||"أخرى";categories[k]=(categories[k]||0)+num(m.amount)});
  const metrics=stats([box("بنود مخططة للشهر",planned,"تتضمن تحويل الادخار إن وجد","blue"),box("منها ادخار مخطط",saved,"ليس مصروفًا فعليًا","violet"),box("المصروف الفعلي",expenseM(),"من الحركات المسجلة","coral")]);
  if(sub==="categories")return metrics+panel("المصروفات المنفذة حسب البند",bars(Object.entries(categories).sort((a,b)=>b[1]-a[1]),"تم احتساب الصرف من عمليات فعلية فقط"));
- return metrics+panel("بنود ميزانية "+period,entryList(items.map(x=>({title:x.name,subtitle:x.type==="saving"?"ادخار مخطط — لا يصنف كمصروف":x.type==="debt"?"سداد دين مخطط":"مصروف مخطط",value:money(x.amount),tag:x.type==="saving"?"ادخار":"خطة",actions:actions("Budget",x.id)})),"لم تُنشأ ميزانية لهذا الشهر"),button("إضافة بند","newBudget",null,"primary")+button("نسخ بنود الشهر السابق","copyPrevBudget",null,"outline"))+
+ return metrics+(data.legacy?.budgetMonths?.[period]?panel("الدخل المخطط حسب النسخة الأصلية",entryList([{title:"الراتب في الميزانية",value:money(data.legacy.budgetMonths[period].salary)},...(data.legacy.budgetMonths[period].incomeLines||[]).map(x=>({title:x.name,value:money(x.amount)}))])):"")+panel("بنود ميزانية "+period,entryList(items.map(x=>({title:x.name,subtitle:x.type==="saving"?"ادخار مخطط — لا يصنف كمصروف":x.type==="debt"?"سداد دين مخطط":"مصروف مخطط",value:money(x.amount),tag:x.type==="saving"?"ادخار":"خطة",actions:actions("Budget",x.id)})),"لم تُنشأ ميزانية لهذا الشهر"),button("إضافة بند","newBudget",null,"primary")+button("نسخ بنود الشهر السابق","copyPrevBudget",null,"outline"))+
  panel("التنفيذ الفعلي",entryList([{title:"مصروفات فعلية",value:money(expenseM())},{title:"سداد ديون من البنك",value:money(paidM())},{title:"ادخار محوّل بالفعل",value:money(total(movements().filter(m=>m.kind==="transfer"&&acc(m.to)?.role==="reserve")))}]));
 }
 function moveName(m){return ({income:"دخل",expense:"مصروف",transfer:"تحويل بين حسابين",repayment:"سداد دين",charge:"شراء بالفيزا",profit:"ربح استثماري"})[m.kind]||"حركة"}
@@ -248,9 +249,25 @@ function contentDebts(){
 }
 function contentInvestment(){
  const accounts=data.accounts.filter(x=>x.role==="investment"),profits=data.moves.filter(x=>x.kind==="profit");
+ if(sub==="legacy"){
+ const rows=(data.legacy?.incomeRecords||[]).filter(x=>/دراهم|ربح|ارباح/.test(x.name||""));
+ return panel("أرباح دراهم الواردة في الميزانيات السابقة",entryList(rows.map(x=>({title:x.name,subtitle:"شهر "+x.month+" • محفوظ من الميزانية، لا يُضاف مرة أخرى للرصيد البنكي",value:money(x.amount)})),"لا توجد أرباح مسجلة في ميزانيات الأشهر السابقة"))+
+ '<p class="body-note">مبالغ الأرباح القديمة محفوظة كما وردت في الميزانية. لا نعتبرها دخلًا جديدًا عند الاستيراد، ولا نضيفها إلى أرصدة الحسابات الحالية مرة ثانية.</p>';
+ }
  if(sub==="profits")return panel("الأرباح المستلمة فعلًا",entryList(profits.map(x=>({title:x.category||"ربح استثماري",subtitle:x.date+" • دخل إلى "+(acc(x.to)?.name||"الحساب"),value:money(x.amount),actions:actions("Move",x.id)})),"لم تسجل توزيعات أرباح مثبتة"),button("تسجيل ربح","newProfit",null,"primary"));
  return stats([box("المحفظة المسجلة",total(accounts,accountBalance),"قيمة مسجلة في آخر رصيد + الحركات","amber"),box("الأرباح المستلمة",total(profits),"مسجلة كدخل فعلي، وليست نموًا مفترضًا","violet")])+panel("الحسابات الاستثمارية",entryList(accounts.map(a=>({title:a.name,subtitle:"الأصل المسجل والحركات المرتبطة",value:money(accountBalance(a)),actions:actions("Account",a.id)})),"لا يوجد حساب استثماري حقيقي بعد"),button("إضافة محفظة","newInvestmentAccount",null,"primary"))+'<p class="body-note">لم نعد نحسب عائدًا افتراضيًا بنسبة ٦٪ أو تراكمًا لسنوات. الأرباح هنا لا تظهر إلا عندما تسجلها مستلمة أو داخلة إلى المحفظة فعليًا.</p>';
 }
+function contentSalary(){
+ const s=data.legacy?.salaryCalc||{},months=data.legacy?.budgetMonths||{};
+ if(sub==="monthly")return panel("الرواتب المسجلة في الميزانيات",entryList(Object.entries(months).sort((a,b)=>b[0].localeCompare(a[0])).map(([m,v])=>({title:"راتب شهر "+m,subtitle:"من ملف الميزانية الشامل؛ ليس إثبات حركة إيداع بنكي",value:money(v.salary)})),"لم تُستورد بيانات راتب شهرية"));
+ const keys=[["base","الراتب الأساسي"],["housing","بدل السكن"],["transport","بدل النقل"],["other","بدلات أخرى"],["deductions","الاستقطاعات"],["bankDeductions","استقطاعات القروض البنكية"]];
+ const gross=num(s.base)+num(s.housing)+num(s.transport)+num(s.other);
+ const net=gross-num(s.deductions)-num(s.bankDeductions);
+ return stats([box("الإجمالي حسب الحاسبة",gross,"من ملف الحاسبة المستورد","blue"),box("الصافي حسب الحاسبة",net,"لا يغيّر أرصدة الحسابات","violet")])+
+ panel("تفاصيل آخر حاسبة راتب محفوظة",entryList(keys.map(([key,title])=>({title,value:money(s[key]||0)})),"لا توجد بيانات حاسبة راتب في الملف"))+
+ '<p class="body-note">تظهر هنا أرقام حاسبة الراتب الموجودة في النسخة الشاملة. لا يُسجل الراتب دخلًا فعليًا تلقائيًا؛ استخدم لصق رسالة إيداع الراتب عندما تصل.</p>';
+}
+
 function contentProjects(){
  if(sub==="activity"){
  const arr=data.moves.filter(x=>x.projectId&&x.date.slice(0,7)===period);
@@ -303,7 +320,7 @@ function render(){
  $("pageHeading").textContent=titles[page];
  $("viewHeading").textContent=choices.find(x=>x[0]===sub)[1];
  $("quickAction").style.display=page==="charts"?"none":"";
- let html=page==="home"?contentHome():page==="accounts"?contentAccounts():page==="budget"?contentBudget():page==="moves"?contentMoves():page==="obligations"?contentObligations():page==="debts"?contentDebts():page==="investments"?contentInvestment():page==="projects"?contentProjects():page==="charts"?contentChart():contentData();
+ let html=page==="home"?contentHome():page==="accounts"?contentAccounts():page==="budget"?contentBudget():page==="moves"?contentMoves():page==="obligations"?contentObligations():page==="debts"?contentDebts():page==="investments"?contentInvestment():page==="projects"?contentProjects():page==="salary"?contentSalary():page==="charts"?contentChart():contentData();
  $("content").innerHTML=html;
  $("storageStatus").textContent=data.moves.length+" حركة مسجلة • "+data.accounts.length+" حساب"+(data.legacy?.bankHistoryCount?" • "+data.legacy.bankHistoryCount+" تاريخية":"");
 }
