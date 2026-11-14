@@ -324,22 +324,36 @@ function loadOld(doc){
  });
  return "استُورد "+nAcc+" رصيد حساب و"+nDebt+" دين و"+nBud+" بند ميزانية. لم تُرحّل سجل الحركات التاريخية حتى لا تُخصم مرتين من الأرصدة الحالية.";
 }
+function completeImport(doc){
+ if(!window.FinanceImport?.isFull(doc))throw Error("الصيغة غير مدعومة؛ اختر النسخة الشاملة من المركز.");
+ const result=window.FinanceImport.migrate(doc),n=result.summary;
+ const answer="تم التحقق من ملف النسخة الشاملة:\n"+
+ n.accounts+" حسابًا، "+n.creditCards+" فيزا، "+n.debts+" دينًا، "+n.history+" حركة قديمة، "+
+ n.budgetMonths+" أشهر ميزانية، "+n.budgetItems+" بندًا، "+n.debtLogs+" حركة دين، "+n.goals+" هدفًا، "+n.learnedRules+" قواعد تعلّم.\n\n"+
+ "سيُستبدل سجل المركز الجديد الحالي بهذه النسخة. ستبقى النسخة القديمة محفوظة في المتصفح كنسخة رجوع، ولن نخصم الحركات التاريخية من الأرصدة مرة أخرى.\nهل تريد الاعتماد؟";
+ if(!confirm(answer))return false;
+ const before=JSON.stringify(data),next=JSON.stringify(result.data);
+ // A separate rollback snapshot avoids silent loss of local new data.
+ localStorage.setItem(KEY+"_before_full_import",before);
+ localStorage.setItem(KEY,next);
+ data=result.data;period=String(doc.budget?.month||month()).slice(0,7);page="data";sub="inspect";render();
+ alert("تم استيراد جميع أقسام الملف: الحسابات والفيزا ودراهم، سجلات العمليات، الميزانيات السابقة، الأهداف، المشاريع والخطة. لم تُكرر أي خصومات.");
+ return true;
+}
 async function importFile(file){
  const doc=JSON.parse(await file.text());if(!doc||typeof doc!=="object")throw Error("ملف غير صالح");
  if(doc.app==="BMSActualFinance"&&doc.data){
   if(!confirm("هل تريد استبدال جميع بيانات المركز الجديد بنسختك المحفوظة؟"))return;
   const d=doc.data;if(!Array.isArray(d.accounts)||!Array.isArray(d.moves)||!Array.isArray(d.commitments))throw Error("نسخة المركز الجديد غير مكتملة");
+  localStorage.setItem(KEY+"_before_full_import",JSON.stringify(data));
   data=d;keep();alert("تم استرجاع البيانات المثبتة");return;
  }
+ if(window.FinanceImport?.isFull(doc)){completeImport(doc);return}
  if(doc.app==="FinanceFuturePlanner"&&doc.plan){
-  if(!confirm("استيراد الأهداف والقروض المرجعية من ملف المستقبل؟ لن تُسجل أي عمليات دفع فعلية."))return;
-  const msg=loadPlan(doc);keep();alert(msg);return;
+  if(!confirm("استيراد الأهداف والقروض المرجعية وخطة المشاريع من ملف المستقبل؟ لن تُسجل أي عملية دفع فعلي."))return;
+  window.FinanceImport.fromPlan(doc,data);keep();alert("تم نقل الأهداف والديون المرجعية وخطة المشاريع. لا توجد مصروفات جديدة مسجلة.");return;
  }
- if(["FinanceCenterBackupV1","FinanceCenterBackupV2","UnifiedFinanceBackupV1"].includes(doc.format)){
-  if(!confirm("استيراد أرصدة الحسابات الحالية وبعض بنود الميزانية من النسخة القديمة؟ لن يُخصم سجل الحركات السابق مرة ثانية."))return;
-  const msg=loadOld(doc);keep();alert(msg);return;
- }
- throw Error("الملف ليس نسخة مدعومة. استخدم نسخة المستقبل JSON أو النسخة الشاملة V8.");
+ throw Error("الملف غير مدعوم. استخدم النسخة الشاملة New_Finance_Full، أو نسخة مستقبل، أو نسخة بوصلة المال.");
 }
 $("pageNav").innerHTML=options(Object.entries(titles),"home");
 $("pageNav").addEventListener("change",e=>{page=e.target.value;sub=nav[page][0][0];render()});
@@ -385,9 +399,10 @@ $("content").addEventListener("click",e=>{
    const oldAccounts=localStorage.getItem("bank_manager_v11_seeded_exact");
    const oldBudget=localStorage.getItem("budget_finance_clean_v4");
    if(!oldAccounts||!oldBudget)throw Error("لم أجد نسخة V8 القديمة محفوظة على هذا الجهاز. استخدم استيراد ملف JSON بدلًا من ذلك.");
-   if(!confirm("سأستورد أرصدة الحسابات الحالية وديون V8 وبنود الشهر، دون ترحيل العمليات التاريخية أو احتسابها مرة ثانية. هل تريد المتابعة؟"))return;
-   const result=loadOld({format:"FinanceCenterBackupV2",accounts:oldAccounts,budget:oldBudget,exportedAt:new Date().toISOString()});
-   keep();alert(result);
+   // The full import itself displays the count and requests confirmation.
+   const currentFuture=localStorage.getItem("finance_future_planner_2026_v1");
+   const doc={format:"UnifiedFinanceBackupV1",accounts:JSON.parse(oldAccounts),budget:JSON.parse(oldBudget),future:currentFuture?JSON.parse(currentFuture):null,exportedAt:new Date().toISOString()};
+   completeImport(doc);
   }catch(err){alert("تعذر استيراد V8 المحلي: "+err.message)}
   return;
  }
