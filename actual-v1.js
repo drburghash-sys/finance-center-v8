@@ -261,18 +261,41 @@ function contentAccounts(){
  }
  return stats([box("الرصيد النقدي الكلي",netCash(),"يشمل حساب الالتزامات مرة واحدة","blue"),box("حساب الالتزامات",reserveCash(),"جزء من الإجمالي النقدي","violet"),box("دراهم والاستثمارات",invCash(),"أصول منفصلة عن النقد البنكي","amber")])+contentAccountFunding();
 }
+function budgetIncomeForMonth(m){
+ const byMonth=data.legacy?.budgetMonths||{};
+ const known=Object.keys(byMonth).filter(k=>/^\d{4}-\d{2}$/.test(k)&&k<=m).sort();
+ const source=byMonth[m]?m:(known.length?known[known.length-1]:null);
+ const b=source?byMonth[source]:null;
+ // Never count the bank deposit on top of the salary estimate: this is a *plan*, not actual cash received.
+ const salary=b?Math.max(0,Number(b.salary)||0):Math.max(0,Number(data.legacy?.future?.settings?.salary)||0);
+ const extras=Array.isArray(b?.incomeLines)?b.incomeLines.reduce((total,x)=>total+Math.max(0,Number(x.amount)||0),0):0;
+ return {salary,extras,total:salary+extras,source,assumedFromPrevious:!!source&&source!==m,missing:!b&&!salary};
+}
 function contentBudget(){
  if(sub==="history")return contentBudgetHistory();
  const items=data.budget.filter(x=>x.month===period);
  const planned=total(items);const saved=total(items.filter(x=>x.type==="saving"));
+ const monthIncome=budgetIncomeForMonth(period),difference=monthIncome.total-planned;
+ const deficit=difference<-0.005,surplus=difference>0.005;
+ const varianceBox='<section class="budget-variance '+(deficit?'deficit':surplus?'surplus':'balanced')+'">'+
+ '<div class="budget-variance-main"><div><span class="budget-variance-caption">نتيجة خطة '+esc(period)+'</span>'+
+ '<strong>'+(deficit?'عجز في الميزانية':surplus?'فائض في الميزانية':'ميزانية متوازنة')+'</strong>'+
+ '<small>'+(deficit?'المطلوب تخفيضه من البنود أو تغطيته بدخل إضافي':surplus?'دخل لم يُخصص بعد لبنود الشهر':'كل الدخل المخطط موزع على البنود')+'</small></div>'+
+ '<div class="budget-variance-value">'+money(Math.abs(difference))+'</div></div>'+
+ '<div class="budget-variance-calculation"><span>الدخل المخطط: <b>'+money(monthIncome.total)+'</b></span>'+
+ '<span>البنود المخططة: <b>'+money(planned)+'</b></span>'+
+ '<span>من البنود ادخار وتحويلات: <b>'+money(saved)+'</b></span></div>'+
+ (monthIncome.assumedFromPrevious?'<div class="budget-variance-hint">حُسب الدخل من آخر ميزانية محفوظة ('+esc(monthIncome.source)+') لأن دخل هذا الشهر غير مسجل مستقلًا.</div>':'')+
+ (monthIncome.missing?'<div class="budget-variance-hint">لم أجد دخلًا مخططًا مؤكدًا للشهر؛ أدخل الراتب أو استورد بيانات الميزانية للحصول على نتيجة دقيقة.</div>':'')+
+ '<div class="budget-variance-hint">هذا فرق بين الدخل والمخصصات قبل التنفيذ. تحويل حساب الالتزامات ادخار وليس مصروفًا، لكنه يحجز جزءًا من الدخل ولذلك يدخل في حساب الفائض أو العجز.</div></section>';
  const categories={};
  data.moves.filter(m=>m.date.slice(0,7)===period&&(m.kind==="expense"||m.kind==="charge")).forEach(m=>{const k=m.category||"أخرى";categories[k]=(categories[k]||0)+num(m.amount)});
  const metrics=stats([box("بنود مخططة للشهر",planned,"تتضمن تحويل الادخار إن وجد","blue"),box("منها ادخار مخطط",saved,"ليس مصروفًا فعليًا","violet"),box("المصروف الفعلي",expenseM(),"من الحركات المسجلة","coral")]);
- if(sub==="categories")return metrics+panel("المصروفات المنفذة حسب البند",bars(Object.entries(categories).sort((a,b)=>b[1]-a[1]),"تم احتساب الصرف من عمليات فعلية فقط"));
+ if(sub==="categories")return varianceBox+metrics+panel("المصروفات المنفذة حسب البند",bars(Object.entries(categories).sort((a,b)=>b[1]-a[1]),"تم احتساب الصرف من عمليات فعلية فقط"));
  const paidCount=items.filter(x=>x.paid).length;
  const budgetRows=items.map(x=>'<div class="budget-line '+(x.paid?'confirmed':'pending')+'"><div class="budget-item-main"><b>'+esc(x.name)+'</b><small>'+esc(x.category||x.type||"مصروف مخطط")+'</small><small>البنك المخصص: '+(linkedAccount(x)?esc(bankGroup(linkedAccount(x))+" ← "+linkedAccount(x).name):"غير محدد — اضغط تعديل")+'</small><strong>'+money(x.amount)+'</strong></div><div class="budget-item-state">'+pill(x.paid?'✓ تم تأكيد السداد':'لم يُؤكد',x.paid?'done':'warn')+
  button(x.paid?'إلغاء التأكيد':'تأكيد السداد','toggleBudgetPaid',x.id,x.paid?'outline':'primary')+actions("Budget",x.id)+'</div></div>').join('');
- return metrics+stats([box("بنود مؤكدة",paidCount,"من "+items.length+" بندًا","blue"),box("قيمة البنود المؤكدة",total(items.filter(x=>x.paid)),"حالة متابعة من الميزانية فقط","violet")])+
+ return varianceBox+metrics+stats([box("بنود مؤكدة",paidCount,"من "+items.length+" بندًا","blue"),box("قيمة البنود المؤكدة",total(items.filter(x=>x.paid)),"حالة متابعة من الميزانية فقط","violet")])+
  (data.legacy?.budgetMonths?.[period]?panel("الدخل المخطط حسب النسخة الأصلية",entryList([{title:"الراتب في الميزانية",value:money(data.legacy.budgetMonths[period].salary)},...(data.legacy.budgetMonths[period].incomeLines||[]).map(x=>({title:x.name,value:money(x.amount)}))])):"")+panel("بنود ميزانية "+period,(items.length?'<div class="budget-list">'+budgetRows+"</div>":blank("لم تُنشأ ميزانية لهذا الشهر")),button("إضافة بند","newBudget",null,"primary")+button("نسخ بنود الشهر السابق","copyPrevBudget",null,"outline"))+
  '<p class="body-note">لون «تم تأكيد السداد» يعكس متابعتك في الميزانية ولا يُخصم مرة أخرى من البنك. لتعديل الرصيد الفعلي سجل عملية بنكية من الحسابات أو عن طريق لصق الرسالة.</p>'+
  panel("التنفيذ الفعلي",entryList([{title:"مصروفات فعلية",value:money(expenseM())},{title:"سداد ديون من البنك",value:money(paidM())},{title:"ادخار محوّل بالفعل",value:money(total(movements().filter(m=>m.kind==="transfer"&&acc(m.to)?.role==="reserve")))}]));
