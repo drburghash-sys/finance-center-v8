@@ -82,3 +82,8 @@ main{width:min(1240px,100% - 26px);margin:-12px auto 32px;flex:1}.nav-shell{back
 .budget-variance-calculation b{color:#283b60}
 .budget-variance-hint{font-size:11px;color:#67768d;line-height:1.7;margin-top:6px}
 @media(max-width:520px){.budget-variance{padding:14px}.budget-variance-main strong{font-size:17px}.budget-variance-calculation{gap:4px 12px}}
+
+/* Monthly income planning – separate from confirmed bank deposits */
+.income-plan-summary{display:flex;gap:8px 18px;flex-wrap:wrap;padding:12px 14px;border-radius:12px;background:#f2f4fd;color:#3e5178;margin-top:11px;font-size:12px}
+.income-plan-summary strong{white-space:nowrap}
+@media(max-width:520px){.income-plan-summary{gap:5px 12px;font-size:11px}}
