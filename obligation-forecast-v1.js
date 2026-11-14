@@ -14,9 +14,24 @@
    return months.find(m=>m>now)||months.filter(m=>m<=now).at(-1)||"";
  }
  function monthlySaving(data,ref){
-   const items=(data.budget||[]).filter(x=>x.month===ref&&x.type==="saving");
-   const money=items.reduce((s,x)=>s+amount(x.amount),0);
-   return {money,items};
+   const all=(data.budget||[]).filter(x=>x.month===ref);
+   const items=all.filter(x=>x.type==="saving" && (/التزام/i.test(x.name||"")||
+     (!x.name||x.type==="saving"&&data.accounts?.some(a=>a.role==="reserve"&&(a.id===x.bankAccountId||a.legacyId===x.linkedBankId)))||
+     // Earlier versions used the saving type specifically for obligations transfers.
+     !all.some(t=>t.type==="saving"&&/التزام/i.test(t.name||""))));
+   const planned=items.reduce((s,x)=>s+amount(x.amount),0);
+   const excluded=new Set(items);
+   const other=all.filter(x=>!excluded.has(x)).reduce((s,x)=>s+amount(x.amount),0);
+   const legacy=data.legacy?.budgetMonths||{},overrides=data.budgetIncomeOverrides||{};
+   const months=[...new Set([...Object.keys(legacy),...Object.keys(overrides)])].filter(m=>Number.isFinite(idx(m))&&m<=ref).sort();
+   const source=months.at(-1),own=overrides[ref]||overrides[source],old=legacy[ref]||legacy[source];
+   const salary=own?.salary??old?.salary??data.legacy?.future?.settings?.salary;
+   const lines=incomeSources(data,ref).length?incomeSources(data,ref):(own?.lines||old?.incomeLines||[]);
+   const known=salary!=null&&Number.isFinite(Number(salary));
+   const income=known?amount(salary)+lines.reduce((t,x)=>t+amount(x.amount),0):null;
+   const canSave=known?Math.max(0,income-other):planned;
+   const money=Math.min(planned,canSave);
+   return {money,planned,shortfall:planned-money,known,income,other,items,source};
  }
  function incomeSources(data,month){
    const overlay=data.budgetIncomeOverrides?.[month];
@@ -113,7 +128,7 @@
    const deficits=s.with.items.filter(x=>x.uncovered>.005);
    return '<section class="panel"><div class="panel-top"><h2>هل تكفي مدخرات الالتزامات عند الاستحقاق؟</h2></div>'+
      '<div class="obligation-kpis"><div><small>الرصيد الحالي الحقيقي</small><strong>'+asMoney(s.initialReserve)+'</strong></div>'+
-     '<div><small>ادخار شهري مفترض</small><strong>'+asMoney(s.base.money)+'</strong></div>'+
+     '<div><small>ادخار شهري قابل للتغطية</small><strong>'+asMoney(s.base.money)+'</strong></div>'+
      '<div><small>أول عجز متوقع مع المشاريع</small><strong class="'+(deficits.length?"danger":"good")+'">'+escape(firstDeficit(s.with))+'</strong></div></div>'+
      '<p class="hint">حساب توقع يبدأ من الرصيد الحالي ويضيف تحويلات الشهور القادمة، ثم يخصم الرسوم عند موعدها. الأرباح المتوقعة غير مضمونة.</p>'+
      '<button class="button primary" type="button" data-action="showObligationForecast">عرض التنبؤ بالتفصيل مع أرباح المشاريع وبدونها</button></section>';
@@ -140,10 +155,12 @@
      '<label>مدة التنبؤ<select id="obligationForecastMonths">'+
      months.map(m=>'<option value="'+m+'" '+(m===current?"selected":"")+'>'+m+' شهرًا</option>').join("")+'</select></label></div>'+
      '<div class="obligation-kpis"><div><small>رصيد حساب الالتزامات الآن</small><strong>'+asMoney(s.initialReserve)+'</strong></div>'+
-     '<div><small>ادخار شهري من الميزانية</small><strong>'+asMoney(s.base.money)+'</strong></div>'+
+     '<div><small>ادخار شهري ممكن من الميزانية</small><strong>'+asMoney(s.base.money)+'</strong></div>'+
      '<div><small>إجمالي الأرباح المحولة ضمن الفترة</small><strong>'+asMoney(s.with.projectAdded)+'</strong></div></div>'+
      '<div class="obligation-comparison"><div><b>بدون أرباح مشاريع</b><small>أول عجز: '+escape(firstDeficit(s.without))+'</small></div>'+
      '<div><b>مع أرباح المشاريع</b><small>أول عجز: '+escape(firstDeficit(s.with))+'</small></div></div>';
+   if(s.base.shortfall>.005)out+='<p class="obligation-warning">بنود ادخار الالتزامات المخططة: '+asMoney(s.base.planned)+'، لكن المتاح حسب دخل ومخصصات الميزانية: '+asMoney(s.base.money)+' فقط. خُفض الادخار المتوقع بمقدار '+asMoney(s.base.shortfall)+' شهريًا لتجنب توقع تغطية غير ممكنة.</p>';
+   if(!s.base.known&&s.base.planned>0)out+='<p class="obligation-warning">الدخل المخطط للميزانية المرجعية غير معروف؛ استُخدم الادخار المحدد دون التحقق من قدرته على التغطية.</p>';
    if(!s.reference)out+='<p class="obligation-warning">لا توجد ميزانية شهرية للادخار. سيُحسب رصيد اليوم والاستحقاقات فقط، حتى تُدخل بند «الالتزامات» في ميزانية شهر.</p>';
    if(s.overlaps.length)out+='<p class="obligation-warning">لمنع احتساب الدخل مرتين، لم تُضف أرباح المشاريع المسجلة أيضًا في مصادر دخل الميزانية: '+s.overlaps.map(x=>escape(x.name)).join("، ")+'؛ ويُفترض أن مخصصاتها مدرجة ضمن الادخار الشهري.</p>';
    out+='<p class="hint">الادخار الشهري يفترض تكرار مبلغ الميزانية المرجعية. لا نضيف ادخار الشهر الحالي مرة ثانية لأنه قد دخل بالفعل في الرصيد؛ ومن الشهر التالي نفترض التحويل قبل سداد الرسوم. وإذا كانت الميزانية عاجزة فلا تعد هذه التحويلات مضمونة.</p>';
