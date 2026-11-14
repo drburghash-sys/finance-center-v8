@@ -92,7 +92,7 @@ function contentSMS(){
  '<label class="form-field"><span>الحساب الصادر منه</span><select name="smsFrom" id="smsFrom">'+smsBankOptions(d.from)+'</select></label>'+
  '<label class="form-field"><span>الحساب الوارد إليه</span><select name="smsTo" id="smsTo">'+smsBankOptions(d.to)+'</select></label>'+
  '<label class="form-field"><span>الفيزا / القرض</span><select name="smsDebt" id="smsDebt">'+smsDebtOptions(d.debtId)+'</select></label>'+
- '<label class="form-field"><span>أصل الدين المسدد (فيزا: كامل المبلغ غالبًا؛ القرض: كما في كشف البنك)</span><input name="smsPrincipal" id="smsPrincipal" type="number" min="0" step="0.01" value="${esc(d.amount||0)}"></label>'+
+ '<label class="form-field"><span>أصل الدين المسدد (فيزا: كامل المبلغ غالبًا؛ القرض: كما في كشف البنك)</span><input name="smsPrincipal" id="smsPrincipal" type="number" min="0" step="0.01" value="'+esc(d.amount||0)+'"></label>'+
  '<label class="form-field"><span>حالة الخصم البنكي عند سداد الفيزا</span><select name="smsPaidElsewhere" id="smsPaidElsewhere">'+
  '<option value="no">خصم جديد من الحساب المحدد</option><option value="yes">الخصم البنكي مسجل سابقًا؛ حدّث رصيد الفيزا فقط</option></select></label>'+
  '</div>';
@@ -134,7 +134,7 @@ function saveSMS(){
  if(data.seenHashes[oldHash]||data.seenHashes[smsDraft.hash]||data.moves.some(m=>m.raw&&window.FinanceImport.normalize(m.raw)===window.FinanceImport.normalize(raw)))throw Error("هذه الرسالة مسجلة سابقًا؛ تم إلغاء الحفظ المكرر");
  if(smsDraft.kind==="unclassified"&&!confirm("صيغة الرسالة لم تُتعرف عليها تلقائيًا. هل راجعت نوع العملية والحساب والمبلغ بنفسك؟"))return;
  if(["expense","transfer","repayment"].includes(kind)&&!paidElsewhere&&acc(from)&&accountBalance(acc(from))+0.005<sum&&!confirm("رصيد الحساب المسجل أقل من مبلغ العملية. هل تريد تسجيلها رغم ذلك؟"))return;
- const entry={id:uid(),date,kind,amount:sum,from:kind==="charge"?"":from,to:kind==="repayment"||kind==="charge"||kind==="expense"?"":to,debtId:kind==="repayment"||kind==="charge"?debtId:"",principal:kind==="repayment"?principal:0,bankAlreadyPosted:kind==="repayment"&&paidElsewhere,category,raw,note:"مُدخل باللصق بعد مراجعة المستخدم",posted:true,source:"sms-paste",smsImported:true};
+ const entry={id:uid(),date,kind,amount:sum,from:["expense","transfer","repayment"].includes(kind)?from:"",to:["income","profit","transfer"].includes(kind)?to:"",debtId:kind==="repayment"||kind==="charge"?debtId:"",principal:kind==="repayment"?principal:0,bankAlreadyPosted:kind==="repayment"&&paidElsewhere,category,raw,note:"مُدخل باللصق بعد مراجعة المستخدم",posted:true,source:"sms-paste",smsImported:true};
  data.moves.push(entry);
  data.seenHashes[oldHash]=1;data.seenHashes[smsDraft.hash]=1;
  period=date.slice(0,7);
