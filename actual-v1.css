@@ -65,3 +65,20 @@ main{width:min(1240px,100% - 26px);margin:-12px auto 32px;flex:1}.nav-shell{back
 .retire-panel .form-grid{margin:10px 0 15px}
 .retire-panel h3,.panel h3{font-size:14px;margin:17px 0 10px;color:#4a5c79}
 @media(max-width:650px){.retire-chart{height:245px;min-height:245px;gap:4px;padding:17px 7px 7px}.retire-column-group{min-width:58px;flex-basis:58px}.retire-columns{gap:2px;padding:0 2px}.retire-rect{min-width:3px}}
+
+/* Monthly plan variance: financing gap vs genuine cash spending */
+.budget-variance{margin:0 0 14px;padding:18px;border:1px solid #d9e1ef;border-right:5px solid #5671b4;border-radius:18px;background:#f8faff;box-shadow:0 7px 20px #263c6e0b}
+.budget-variance.deficit{border-right-color:#d44b62;background:#fff3f4}
+.budget-variance.surplus{border-right-color:#2c9874;background:#f1faf5}
+.budget-variance.balanced{border-right-color:#637bbb;background:#f4f7ff}
+.budget-variance-main{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+.budget-variance-caption{font-size:11px;color:#64718d;display:block;font-weight:700}
+.budget-variance-main strong{display:block;font-size:20px;margin:2px 0 0;font-weight:900}
+.budget-variance-main small{font-size:11px;display:block;color:#66748e}
+.budget-variance-value{font-size:clamp(23px,4.3vw,34px);font-weight:950;color:#344a8e;white-space:nowrap}
+.budget-variance.deficit .budget-variance-value{color:#bd344b}
+.budget-variance.surplus .budget-variance-value{color:#168260}
+.budget-variance-calculation{display:flex;gap:8px 20px;flex-wrap:wrap;border-top:1px solid #a4adc83b;margin-top:14px;padding-top:10px;color:#54627e;font-size:12px}
+.budget-variance-calculation b{color:#283b60}
+.budget-variance-hint{font-size:11px;color:#67768d;line-height:1.7;margin-top:6px}
+@media(max-width:520px){.budget-variance{padding:14px}.budget-variance-main strong{font-size:17px}.budget-variance-calculation{gap:4px 12px}}
