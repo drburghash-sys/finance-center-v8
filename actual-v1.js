@@ -65,7 +65,8 @@ function contentHome(){
  const latest=data.moves.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,6);
  const metrics=stats([box("النقد في الحسابات",netCash(),"يشمل حساب الالتزامات","blue"),box("المخصص للالتزامات",reserveCash(),"ضمن النقد أعلاه، لا يُضاف مرة ثانية","violet"),box("مصروف الشهر الفعلي",expenseM(),"مشتريات ومصاريف مثبتة فقط","coral"),box("مجموع الديون المثبتة",sumDebt(),"بحسب آخر أرصدة مدخلة وحركاتها","amber")]);
  if(sub==="recent")return panel("آخر الحركات المسجلة",entryList(latest.map(m=>({title:moveName(m),subtitle:m.date+" • "+esc(m.category||"")+ " • "+moveAccounts(m),value:money(m.amount),negative:m.kind==="expense"||m.kind==="charge"})),"لم تُسجّل حركات فعلية بعد"),button("تسجيل حركة","newMove",null,"primary"));
- return metrics+panel("ماذا يعرض هذا المركز؟",'<div class="intro-grid"><div><span class="round-icon">✓</span><b>حقيقي ومسجل</b><p>الأرصدة والحركات والأرباح التي أدخلتها بالفعل. لا نمو افتراضي ولا حساب لعجز مستقبلي.</p></div><div><span class="round-icon">≠</span><b>ادخار ليس مصروفًا</b><p>التحويل إلى حساب الالتزامات يبقى ضمن ثروتك، ويُحسب المصروف فقط عندما تسدد فاتورة حقيقية.</p></div><div><span class="round-icon">◷</span><b>موعد غير مدفوع</b><p>رسوم الدراسة والسيارة مواعيد مخططة، وليست دفعات حقيقية إلى أن تُسجّل عملية السداد.</p></div></div>')+
+ const start=(!data.accounts.length&&!data.moves.length)?panel("البدء في المركز الجديد",'<p class="body-note">الموقع جديد وخالٍ من المدخلات القديمة. يمكنك استيراد ملف «المستقبل المالي» للمواعيد والأقساط، أو إحضار الأرصدة السابقة من نفس الجهاز. لا يتحول الموعد إلى مصروف إلا إذا سجلت عملية دفع.</p><div class="buttons">'+button("فتح الاستيراد","goData",null,"primary")+button("إضافة أول حساب","newAccount",null,"outline")+'</div>'):"";
+ return metrics+start+panel("ماذا يعرض هذا المركز؟",'<div class="intro-grid"><div><span class="round-icon">✓</span><b>حقيقي ومسجل</b><p>الأرصدة والحركات والأرباح التي أدخلتها بالفعل. لا نمو افتراضي ولا حساب لعجز مستقبلي.</p></div><div><span class="round-icon">≠</span><b>ادخار ليس مصروفًا</b><p>التحويل إلى حساب الالتزامات يبقى ضمن ثروتك، ويُحسب المصروف فقط عندما تسدد فاتورة حقيقية.</p></div><div><span class="round-icon">◷</span><b>موعد غير مدفوع</b><p>رسوم الدراسة والسيارة مواعيد مخططة، وليست دفعات حقيقية إلى أن تُسجّل عملية السداد.</p></div></div>')+
  panel("ملخص هذا الشهر",entryList([{title:"دخل مثبت",value:money(incomeM())},{title:"مصاريف ومشتريات مثبتة",value:money(expenseM())},{title:"سداد ديون مثبت",value:money(paidM())},{title:"تحويل إلى حساب الادخار",value:money(total(movements().filter(m=>m.kind==="transfer"&&acc(m.to)?.role==="reserve")))}]));
 }
 function contentAccounts(){
@@ -366,6 +367,7 @@ $("content").addEventListener("click",e=>{
   try{removeRecord(action.slice(6),target.dataset.id)}catch(err){alert(err.message)}
   return;
  }
+ if(action==="goData"){page="data";sub="backup";render();return;}
  if(action==="export"){download();return;}
  if(action==="importLocalV8"){
   try{
