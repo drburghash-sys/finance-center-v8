@@ -20,7 +20,7 @@ if(!data.legacy||typeof data.legacy!=="object")data.legacy={budgetMonths:{},inco
 let page="home",sub="summary",period=month(),modalType="",editingId="",chartKind="expenses",smsDraft=null,smsStatus="",bankPick="",accountPick="";
 const nav={
 home:[["summary","ملخص اليوم"],["recent","آخر الحركات"]],
-accounts:[["balances","الأرصدة الحقيقية"],["funding","تأكيد تحويلات الحسابات"],["transfers","التحويلات"],["paste","لصق رسالة البنك"]],
+accounts:[["balances","الأرصدة بحسب البنك"],["funding","تأكيد تحويلات الحسابات"],["transfers","التحويلات"],["paste","لصق رسالة البنك"]],
 budget:[["month","ميزانية الشهر"],["categories","المصروفات الفعلية"],["history","الأشهر السابقة"]],
 moves:[["ledger","سجل الحركات"],["income","الإيرادات"],["spend","المصروفات"],["paste","إدخال من رسالة"]],
 obligations:[["reserve","حساب الادخار"],["due","الاستحقاقات"],["catalog","إدارة المواعيد"],["paid","المدفوع فعليًا"]],
@@ -216,7 +216,8 @@ function contentAccountFunding(){
  const names=groups.map(g=>({title:g.name,subtitle:g.children.length+" حساب فرعي • "+g.children.filter(isAccountConfirmed).length+" مؤكد",value:g.children.every(isAccountConfirmed)?"✓ مكتمل":"غير مكتمل",tag:g.children.every(isAccountConfirmed)?"مكتمل":"قيد التأكيد",tagType:g.children.every(isAccountConfirmed)?"done":"warn"}));
  return stats([box("البنوك المكتملة",completed,"من "+groups.length+" بنوك","violet"),box("حسابات مؤكدة",data.accounts.filter(isAccountConfirmed).length,"من "+data.accounts.length+" حساب","blue")])+
  panel("تأكيد تحويلات "+period,selector+bankBanner+acct+
- '<div class="buttons">'+button(allDone?"إلغاء تأكيد جميع حسابات البنك":"تأكيد جميع حسابات البنك","toggleBankFunding",bankPick,allDone?"outline":"primary")+'</div>'+oldText+
+ '<div class="buttons">'+button(allDone?"إلغاء تأكيد جميع حسابات البنك":"تأكيد جميع حسابات البنك","toggleBankFunding",bankPick,allDone?"outline":"primary")+
+ button("إضافة حساب فرعي","newAccount",null,"outline")+button("لصق رسالة بنك","openSms",null,"outline")+'</div>'+oldText+
  '<p class="body-note">هذا التأكيد يغيّر حالة المتابعة ولون البنك والحساب لهذا الشهر فقط. لا ينشئ حركة بنكية ولا يغيّر الرصيد. لتسجيل تحويل نقدي فعلي استخدم «تحويل جديد» أو لصق رسالة البنك.</p>')+
  panel("حالة جميع البنوك",entryList(names));
 }
@@ -228,7 +229,7 @@ function contentAccounts(){
   const arr=data.moves.filter(x=>x.kind==="transfer").slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,35);
   return panel("التحويلات بين الحسابات",entryList(arr.map(x=>({title:(acc(x.from)?.name||"—")+" ← "+(acc(x.to)?.name||"—"),subtitle:x.date+" • لا يعد مصروفًا",value:money(x.amount),actions:actions("Move",x.id)})), "لا توجد تحويلات"),button("تحويل جديد","newTransfer",null,"primary"));
  }
- return stats([box("الرصيد النقدي الكلي",netCash(),"الحسابات البنكية + حساب الالتزامات","blue"),box("حساب الالتزامات",reserveCash(),"جزء من الإجمالي أعلاه","violet"),box("دراهم والاستثمارات",invCash(),"أصول منفصلة عن النقد البنكي","amber")])+panel("حساباتك الحالية",entryList(data.accounts.map(a=>({title:a.name,subtitle:a.role==="reserve"?"حساب مدخر للالتزامات":a.role==="investment"?"محفظة/استثمار":"حساب بنكي",value:money(accountBalance(a)),tag:a.last4?"•••• "+a.last4:"",actions:actions("Account",a.id)})),"لم تُدخل حسابات بنكية بعد"),button("إضافة حساب","newAccount",null,"primary")+button("لصق رسالة بنك","openSms",null,"outline"));
+ return stats([box("الرصيد النقدي الكلي",netCash(),"يشمل حساب الالتزامات مرة واحدة","blue"),box("حساب الالتزامات",reserveCash(),"جزء من الإجمالي النقدي","violet"),box("دراهم والاستثمارات",invCash(),"أصول منفصلة عن النقد البنكي","amber")])+contentAccountFunding();
 }
 function contentBudget(){
  if(sub==="history")return contentBudgetHistory();
