@@ -8,29 +8,32 @@ const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36);
 const money=v=>new Intl.NumberFormat("ar-SA",{maximumFractionDigits:2}).format(Number(v)||0)+" ر.س";
 const num=v=>Math.max(0,Number(v)||0);
 const esc=x=>String(x==null?"":x).replace(/[&<>"']/g,t=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[t]));
-const def=()=>({version:1,created:now(),accounts:[],moves:[],budget:[],commitments:[],debts:[],projects:[],journal:[]});
+const def=()=>({version:2,created:now(),accounts:[],moves:[],budget:[],commitments:[],debts:[],projects:[],journal:[],seenHashes:{},learnedRules:[],legacy:{budgetMonths:{},incomeRecords:[],debtLogs:[]}});
 let data;
 try{data=JSON.parse(localStorage.getItem(KEY)||"null")||def();}catch(e){data=def()}
 ["accounts","moves","budget","commitments","debts","projects","journal"].forEach(k=>{if(!Array.isArray(data[k]))data[k]=[]});
+if(!data.seenHashes||typeof data.seenHashes!=="object")data.seenHashes={};
+if(!Array.isArray(data.learnedRules))data.learnedRules=[];
+if(!data.legacy||typeof data.legacy!=="object")data.legacy={budgetMonths:{},incomeRecords:[],debtLogs:[]};
 let page="home",sub="summary",period=month(),modalType="",editingId="",chartKind="expenses";
 const nav={
 home:[["summary","ملخص اليوم"],["recent","آخر الحركات"]],
-accounts:[["balances","الأرصدة الحقيقية"],["transfers","التحويلات"]],
-budget:[["month","ميزانية الشهر"],["categories","المصروفات الفعلية"]],
-moves:[["ledger","سجل الحركات"],["income","الإيرادات"],["spend","المصروفات"]],
+accounts:[["balances","الأرصدة الحقيقية"],["transfers","التحويلات"],["paste","لصق رسالة البنك"]],
+budget:[["month","ميزانية الشهر"],["categories","المصروفات الفعلية"],["history","الأشهر السابقة"]],
+moves:[["ledger","سجل الحركات"],["income","الإيرادات"],["spend","المصروفات"],["paste","إدخال من رسالة"]],
 obligations:[["reserve","حساب الادخار"],["due","الاستحقاقات"],["catalog","إدارة المواعيد"],["paid","المدفوع فعليًا"]],
-debts:[["balances","أرصدة الديون"],["payments","السداد المثبت"]],
+debts:[["balances","أرصدة الديون"],["payments","السداد المثبت"],["paste","لصق رسالة الفيزا"],["history","سجلات الفيزا المستوردة"]],
 investments:[["darahim","محفظة دراهم"],["profits","الأرباح الفعلية"]],
 projects:[["list","المشاريع"],["activity","حركات المشاريع"]],
 charts:[["expenses","المصروف حسب البند"],["spending","المصروف الكامل"],["accounts","أرصدة الحسابات"],["projects","المشاريع"],["obligations","الالتزامات"],["debts","الديون"],["darahim","دراهم"],["monthly","حركة ١٢ شهرًا"]],
-data:[["backup","النسخ والاستيراد"],["about","طريقة الحساب"]]
+data:[["backup","النسخ والاستيراد"],["inspect","ملخص بيانات الاستيراد"],["about","طريقة الحساب"]]
 };
 const titles={home:"لوحة الواقع",accounts:"الحسابات",budget:"الميزانية",moves:"الحركات",obligations:"الالتزامات",debts:"الديون",investments:"دراهم",projects:"المشاريع",charts:"الرسوم البيانية",data:"البيانات"};
 const acc=id=>data.accounts.find(x=>x.id===id);
 const debt=id=>data.debts.find(x=>x.id===id);
 const project=id=>data.projects.find(x=>x.id===id);
 const accountBalance=a=>Number(a.opening||0)+data.moves.reduce((v,m)=>v+(m.posted===false?0:((m.to===a.id?num(m.amount):0)-(m.from===a.id?num(m.amount):0))),0);
-const debtsBalance=d=>Math.max(0,num(d.opening)+data.moves.reduce((v,m)=>v+(m.debtId===d.id?(m.kind==="charge"?num(m.amount):m.kind==="repayment"?-num(m.principal):0):0),0));
+const debtsBalance=d=>Math.max(0,num(d.opening)+data.moves.reduce((v,m)=>{if(m.posted===false||m.debtId!==d.id)return v;return v+(m.kind==="charge"?num(m.amount):m.kind==="repayment"?-num(m.principal):0);},0));
 const reserves=()=>data.accounts.filter(x=>x.role==="reserve");
 const banks=()=>data.accounts.filter(x=>x.role==="bank"||x.role==="reserve");
 const movements=(m=period)=>data.moves.filter(x=>x.date.slice(0,7)===m);
