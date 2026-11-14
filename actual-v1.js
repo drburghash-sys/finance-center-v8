@@ -186,7 +186,28 @@ function bankGroup(a){
  return String(a.bank||"غير مصنف").trim()||"غير مصنف";
 }
 function bankConfirmations(){if(!data.confirmations)data.confirmations={accounts:{},budget:{}};if(!data.confirmations.accounts)data.confirmations.accounts={};return data.confirmations.accounts[period]||(data.confirmations.accounts[period]={})}
-function isAccountConfirmed(a){return bankConfirmations()[a.id]===true}
+function linkedAccount(item){
+ const legacyId=item.legacyAccountId||"";
+ const legacyLink=data.legacy?.links?.[legacyId],itemLink=data.legacy?.itemLinks?.[item.legacyId||""]?.bankAccountId;
+ const refs=[item.bankAccountId,item.linkedBankId,itemLink,legacyLink];
+ for(const ref of refs){if(!ref)continue;
+  const found=data.accounts.find(x=>x.id===ref||x.legacyId===ref);if(found)return found;
+ }
+ const oldAccount=(data.legacy?.budgetAccounts||[]).find(x=>x.id===legacyId);
+ if(oldAccount){
+  const group=bankGroup({bank:oldAccount.bank||oldAccount.name||""});
+  const candidates=data.accounts.filter(x=>bankGroup(x)===group);
+  if(candidates.length===1)return candidates[0];
+ }
+ return null;
+}
+function fundedItems(a){return data.budget.filter(x=>x.month===period&&linkedAccount(x)?.id===a.id)}
+function fundedAmount(a){return fundedItems(a).reduce((z,x)=>z+Math.max(0,Number(x.amount)||0),0)}
+function fundingSig(a){return JSON.stringify(fundedItems(a).map(x=>[x.id,Number(x.amount)||0]).sort((a,b)=>String(a[0]).localeCompare(String(b[0]))))}
+function isAccountConfirmed(a){
+ const v=bankConfirmations()[a.id];
+ return fundedItems(a).length>0&&(v===true||!!(v&&typeof v==="object"&&v.signature===fundingSig(a)));
+}
 function bankGroups(){const names=[...new Set(data.accounts.map(bankGroup))];return names.map(name=>({name,children:data.accounts.filter(x=>bankGroup(x)===name)}))}
 function contentAccountFunding(){
  const groups=bankGroups();
@@ -195,25 +216,33 @@ function contentAccountFunding(){
  const group=groups.find(g=>g.name===bankPick);
  if(!accountPick||!group.children.some(a=>a.id===accountPick))accountPick=group.children[0]?.id||"";
  const account=acc(accountPick);
- const allDone=group.children.length>0&&group.children.every(isAccountConfirmed);
- const completed=groups.filter(g=>g.children.length&&g.children.every(isAccountConfirmed)).length;
+ const fundingChildren=group.children.filter(a=>fundedItems(a).length>0);
+ const allDone=fundingChildren.length>0&&fundingChildren.every(isAccountConfirmed);
+ const groupTotal=group.children.reduce((z,a)=>z+fundedAmount(a),0);
+ const confirmedTotal=group.children.filter(isAccountConfirmed).reduce((z,a)=>z+fundedAmount(a),0);
+ const completed=groups.filter(g=>g.children.some(a=>fundedItems(a).length)&&g.children.filter(a=>fundedItems(a).length).every(isAccountConfirmed)).length;
  const groupOptions=groups.map(g=>{
-  const complete=g.children.every(isAccountConfirmed);return[g.name,(complete?"✓ ":"○ ")+g.name+" ("+g.children.filter(isAccountConfirmed).length+"/"+g.children.length+")"];
+  const active=g.children.filter(a=>fundedItems(a).length);const complete=active.length>0&&active.every(isAccountConfirmed);return[g.name,(complete?"✓ ":"○ ")+g.name+" — "+money(g.children.reduce((z,a)=>z+fundedAmount(a),0))+" ("+active.filter(isAccountConfirmed).length+"/"+active.length+")"];
  });
- const accountOpts=group.children.map(a=>[a.id,(isAccountConfirmed(a)?"✓ ":"○ ")+a.name+" •••• "+(a.last4||"—")]);
+ const accountOpts=group.children.map(a=>[a.id,(isAccountConfirmed(a)?"✓ ":"○ ")+a.name+" • "+money(fundedAmount(a))+" •••• "+(a.last4||"—")]);
  const previous=data.legacy?.budgetMonths?.[period]?.accountStatus||{};
  const oldGroups=data.legacy?.budgetAccounts||[];
  const matching=oldGroups.filter(x=>bankGroup({bank:x.name||""})===bankPick).map(x=>({name:x.name,confirmed:previous[x.id]===true})).filter(x=>previous[oldGroups.find(a=>a.name===x.name)?.id]!==undefined);
- const marked=group.children.filter(isAccountConfirmed).length;
+ const marked=fundingChildren.filter(isAccountConfirmed).length;
  const selector='<div class="funding-selectors"><label class="form-field"><span>أولًا: اختر البنك</span><select id="fundBank">'+options(groupOptions,bankPick)+'</select></label>'+
  '<label class="form-field"><span>ثانيًا: اختر الحساب الفرعي</span><select id="fundAccount">'+options(accountOpts,accountPick)+'</select></label></div>';
- const bankBanner='<div class="bank-banner '+(allDone?"confirmed":"pending")+'"><b>'+esc(bankPick)+'</b><span>'+(allDone?"✓ جميع الحسابات مؤكدة لهذا الشهر":"بانتظار تأكيد "+(group.children.length-marked)+" حساب")+'</span><strong>'+marked+" / "+group.children.length+'</strong></div>';
+ const bankBanner='<div class="bank-banner '+(allDone?"confirmed":"pending")+'"><b>'+esc(bankPick)+'</b><span>'+(allDone?"✓ جميع الحسابات مؤكدة لهذا الشهر":"بانتظار تأكيد "+(fundingChildren.length-marked)+" حساب")+'</span><strong>'+marked+" / "+fundingChildren.length+" حساب • المطلوب تحويله "+money(groupTotal)+" • المؤكد "+money(confirmedTotal)+'</strong></div>';
  const acct='<div class="funding-account '+(account&&isAccountConfirmed(account)?"confirmed":"pending")+'">'+
  (account?'<b>'+esc(account.name)+'</b><small>'+esc(account.bank)+" •••• "+esc(account.last4||"—")+'</small><strong>'+money(accountBalance(account))+'</strong>'+
- '<span class="fund-state">'+(isAccountConfirmed(account)?"✓ تم تأكيد التحويل":"لم يؤكد التحويل بعد")+'</span>'+
- button(isAccountConfirmed(account)?"إلغاء تأكيد هذا الحساب":"تأكيد تحويل هذا الحساب","toggleAccountFunding",account.id,isAccountConfirmed(account)?"outline":"primary")+button("تعديل الحساب الفرعي","editAccount",account.id,"outline"):"")+'</div>';
+ '<span class="fund-state">'+(fundedItems(account).length===0?"لا توجد بنود مخصصة لهذا الحساب":isAccountConfirmed(account)?"✓ تم تأكيد تحويل المخصص":"لم يؤكد تحويل المخصص بعد")+'</span>'+
+ '<div class="hint">المطلوب تحويله لهذا الحساب: <b>'+money(fundedAmount(account))+'</b></div>'+
+ '<div class="compact-list">'+fundedItems(account).map(x=>'<div class="list-row"><div><b>'+esc(x.name)+'</b><small>'+ (x.paid?"✓ تم تنفيذ البند":"○ لم يؤكد تنفيذ البند")+'</small></div><b>'+money(x.amount)+'</b></div>').join("")+'</div>'+
+  (fundedItems(account).length?button(isAccountConfirmed(account)?"إلغاء تأكيد هذا الحساب":"تأكيد تحويل هذا الحساب","toggleAccountFunding",account.id,isAccountConfirmed(account)?"outline":"primary"):"")+button("تعديل الحساب الفرعي","editAccount",account.id,"outline"):"")+'</div>';
  const oldText=matching.length?'<p class="hint">من ميزانية V8 القديمة: '+matching.map(x=>esc(x.name)+" — "+(x.confirmed?"تم تأكيد المجموعة":"لم تؤكد المجموعة")).join(" • ")+'</p>':"";
- const names=groups.map(g=>({title:g.name,subtitle:g.children.length+" حساب فرعي • "+g.children.filter(isAccountConfirmed).length+" مؤكد",value:g.children.every(isAccountConfirmed)?"✓ مكتمل":"غير مكتمل",tag:g.children.every(isAccountConfirmed)?"مكتمل":"قيد التأكيد",tagType:g.children.every(isAccountConfirmed)?"done":"warn"}));
+ const names=groups.map(g=>{
+  const active=g.children.filter(a=>fundedItems(a).length),complete=active.length>0&&active.every(isAccountConfirmed);
+  return {title:g.name,subtitle:active.length+" حسابات مخصصة • "+active.filter(isAccountConfirmed).length+" مؤكد",value:money(g.children.reduce((z,a)=>z+fundedAmount(a),0)),tag:complete?"مكتمل":active.length?"قيد التأكيد":"لا بنود",tagType:complete?"done":"warn"};
+ });
  return stats([box("البنوك المكتملة",completed,"من "+groups.length+" بنوك","violet"),box("حسابات مؤكدة",data.accounts.filter(isAccountConfirmed).length,"من "+data.accounts.length+" حساب","blue")])+
  panel("تأكيد تحويلات "+period,selector+bankBanner+acct+
  '<div class="buttons">'+button(allDone?"إلغاء تأكيد جميع حسابات البنك":"تأكيد جميع حسابات البنك","toggleBankFunding",bankPick,allDone?"outline":"primary")+
@@ -578,12 +607,12 @@ $("content").addEventListener("click",e=>{
  }
  if(action==="toggleAccountFunding"){
   const x=acc(target.dataset.id);
-  if(x){const flags=bankConfirmations();flags[x.id]=!isAccountConfirmed(x);keep();}
+  if(x&&fundedItems(x).length){const flags=bankConfirmations();flags[x.id]=isAccountConfirmed(x)?false:{signature:fundingSig(x),amount:fundedAmount(x),confirmedAt:now()};keep();}
   return;
  }
  if(action==="toggleBankFunding"){
   const g=bankGroups().find(x=>x.name===target.dataset.id);
-  if(g){const confirmed=g.children.every(isAccountConfirmed);const flags=bankConfirmations();g.children.forEach(a=>flags[a.id]=!confirmed);keep();}
+  if(g){const active=g.children.filter(a=>fundedItems(a).length);if(!active.length){alert("لا توجد بنود مرتبطة بحسابات هذا البنك للشهر المختار.");return}const confirmed=active.every(isAccountConfirmed),flags=bankConfirmations();active.forEach(a=>flags[a.id]=confirmed?false:{signature:fundingSig(a),amount:fundedAmount(a),confirmedAt:now()});keep();}
   return;
  }
  if(action==="toggleCommitment"){
