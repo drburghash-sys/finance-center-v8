@@ -136,3 +136,18 @@ details.panel>summary{font-size:15px;font-weight:800;cursor:pointer}
 .row-actions .danger:hover,.button.danger:hover{background:#fce4e7}
 .list-row{overflow-wrap:anywhere}
 @media(max-width:650px){.ledger-warning,.sms-card-hint{font-size:12px}.row-actions{gap:5px}.row-actions .mini{padding:6px 8px}}
+
+/* One-stop fast message inbox: uncluttered by default */
+.sms-simple-field{display:flex;flex-direction:column;gap:7px;margin:8px 0 12px;font-weight:700;color:#334563}
+.sms-simple-field textarea{font-family:inherit;font-size:16px;line-height:1.75;min-height:104px;resize:vertical;border:1px solid #cbd7ed;background:#f8faff;border-radius:14px;padding:14px;color:#283a5a;width:100%;box-sizing:border-box;direction:auto}
+.sms-easy-help{font-size:13px;line-height:1.9;color:#52637f;margin:0 0 10px}
+.sms-result{background:#effaf5;border:1px solid #c6e5d6;border-radius:12px;padding:13px;color:#1b795b;font-weight:750;margin-bottom:12px}
+.sms-preview{display:flex;flex-direction:column;gap:4px;border-radius:13px;background:#f0f3ff;border-right:4px solid #6579d9;padding:12px;color:#293d6d;margin:10px 0}
+.sms-preview strong{font-size:17px}.sms-preview small{font-size:12px;color:#687d99}
+.sms-review-hint{font-size:12px;color:#66768e;margin:7px 0}
+#smsReviewDetails{border:1px solid #e1e8f5;padding:9px 11px;border-radius:12px;margin:12px 0;background:#fff}
+#smsReviewDetails summary{cursor:pointer;font-weight:700;color:#5362a4;padding:4px}
+.sms-short-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0}
+.sms-short-fields .form-field{min-width:0}
+.sms-short-fields [data-sms-row][hidden]{display:none!important}
+@media(max-width:650px){.sms-short-fields{grid-template-columns:1fr}.sms-preview strong{font-size:15px}}
