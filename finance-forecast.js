@@ -15,7 +15,7 @@
   const now=new Date(),d=new Date(now.getFullYear(),now.getMonth()+1,1);
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
  };
- const balance=(data,a)=>n(a.opening)+(data.moves||[]).reduce((v,m)=>{
+ const balance=(data,a)=>n(a.opening)+n(a.balanceAdjustment)+(data.moves||[]).reduce((v,m)=>{
   if(m.posted===false)return v;
   return v+(m.to===a.id?positive(m.amount):0)-(m.from===a.id&&!m.bankAlreadyPosted?positive(m.amount):0);
  },0);
