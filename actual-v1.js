@@ -84,87 +84,128 @@ function smsBankOptions(selected){
 function smsDebtOptions(selected){
  return options(data.debts.filter(x=>x.kind==="credit"||x.kind==="loan").map(x=>[x.id,x.name+" • "+money(debtsBalance(x))]),selected,"اختر الفيزا أو الدين");
 }
+function isSameSms(raw,parsed){
+ const key=window.FinanceImport.hash(window.FinanceImport.normalize(raw));
+ return data.seenHashes?.[key]||data.seenHashes?.[parsed.hash]||
+ data.moves.some(m=>m.raw&&window.FinanceImport.normalize(m.raw)===window.FinanceImport.normalize(raw));
+}
+function matchingMoneyMovement(kind,sum,date,debtId,from){
+ return data.moves.find(m=>m.posted!==false&&!m.importedHistory&&Math.abs(num(m.amount)-sum)<.005&&
+  Math.abs(new Date(m.date).getTime()-new Date(date).getTime())<=86400000&&
+  (kind==="repayment"?(m.kind==="repayment"&&m.debtId===debtId||(m.kind==="expense"&&m.from===from&&/فيزا|visa|بطاقة|سداد/i.test((m.raw||"")+" "+(m.category||"")))):
+   (m.kind===kind&&["charge","cash_advance","refund"].includes(kind)&&m.debtId===debtId&&!!debtId)));
+}
+function smsCanAutoPost(d){
+ if(!d||!d.confidence||!(num(d.amount)>0)||!d.date||!d.kind||isSameSms(d.raw,d))return false;
+ const k=d.kind,did=debt(d.debtId),from=acc(d.from),to=acc(d.to);
+ if(matchingMoneyMovement(k,num(d.amount),d.date,d.debtId,d.from))return false;
+ if(["charge","refund"].includes(k))return did?.kind==="credit"&&(k!=="refund"||debtsBalance(did)+.005>=d.amount);
+ if(k==="cash_advance")return did?.kind==="credit"&&!!to;
+ if(k==="expense")return !!from&&/^(bank|reserve|cash)$/.test(from.role)&&!/فيزا|visa|credit.card|بطاقة.*ائتمان/i.test(d.raw);
+ if(k==="income"||k==="profit")return !!to&&["bank","reserve","cash"].includes(to.role);
+ if(k==="transfer")return !!from&&!!to&&from.id!==to.id;
+ // Visa repayment is automatic only when the exact bank debit account is identified in the message.
+ if(k==="repayment")return did?.kind==="credit"&&!!from&&["bank","reserve","cash"].includes(from.role)&&d.accountDigits?.includes(from.last4)&&debtsBalance(did)+.005>=d.amount;
+ return false;
+}
 function contentSMS(){
  const d=smsDraft;
- const desc='<p class="body-note">اختر نوع العملية الصحيح قبل الحفظ. شراء الفيزا يزيد دين البطاقة فقط؛ لا تختَر حساب الراتب كحساب دفع. لا تُخصم الأرصدة قبل الضغط على «تسجيل العملية».</p>';
- const undo=data.lastSmsMoveId&&data.moves.some(m=>m.id===data.lastSmsMoveId)?'<div class="sms-undo">'+button("التراجع عن آخر رسالة مسجلة","undoLastSms",null,"danger")+'</div>':"";
- const input='<label class="form-field"><span>نص رسالة البنك أو الفيزا</span><textarea id="smsRaw" rows="6" spellcheck="false" placeholder="ألصق الرسالة كما وصلتك">'+esc(d?.raw||"")+'</textarea></label><div class="buttons">'+button("تحليل الرسالة","analyzeSms",null,"primary")+button("مسح النص","clearSms",null,"outline")+'</div>';
- if(!d)return panel("إدخال بالنسخ واللصق",desc+input+(smsStatus?'<p class="body-note">'+esc(smsStatus)+'</p>':"")+undo);
- const kinds=[["","— اختر نوع العملية —"],["charge","شراء بالفيزا (دين على البطاقة؛ دون خصم بنكي)"],["cash_advance","سحب نقدي من الفيزا (يزيد الدين)"],["refund","استرداد مبلغ إلى الفيزا (ينقص الدين)"],["repayment","سداد الفيزا أو القرض من البنك"],["expense","مصروف من حساب بنكي"],["income","حوالة واردة إلى البنك"],["transfer","تحويل بين حسابين فعليين"],["profit","ربح دراهم مستلم"]];
- const fieldRows=[
-  '<label class="form-field" data-sms-row="from"><span>الحساب البنكي الذي خرج منه المبلغ فعلاً</span><select name="smsFrom" id="smsFrom">'+smsBankOptions(d.from)+'</select></label>',
-  '<label class="form-field" data-sms-row="to"><span>الحساب الذي استقبل المبلغ (اختياري لسحب نقد الفيزا)</span><select name="smsTo" id="smsTo">'+smsBankOptions(d.to)+'</select></label>',
-  '<label class="form-field" data-sms-row="debt"><span>بطاقة الفيزا أو القرض المتأثر</span><select name="smsDebt" id="smsDebt">'+smsDebtOptions(d.debtId)+'</select></label>',
-  '<label class="form-field" data-sms-row="principal"><span>مقدار انخفاض أصل الدين من الدفعة</span><input name="smsPrincipal" id="smsPrincipal" type="number" min="0" step="0.01" value="'+esc(d.amount||"")+'"></label>',
-  '<label class="form-field" data-sms-row="paidElsewhere"><span>هل الخصم البنكي لسداد الفيزا مسجل مسبقًا؟</span><select name="smsPaidElsewhere" id="smsPaidElsewhere"><option value="no">لا — خصم جديد من الحساب المحدد</option><option value="yes">نعم — حدّث رصيد الدين فقط دون خصم بنكي ثانٍ</option></select></label>'
- ];
- return panel("راجع رسالة البنك أو البطاقة",desc+input+
-  '<div class="paste-result"><strong>تنبيه التحليل:</strong> '+esc(d.reason)+
-  '<p class="hint">التصنيف المقترح: '+esc(moveName({kind:d.kind}))+' • أرقام البطاقة: '+esc(d.cardDigits.join("، ")||"لم تظهر")+'</p></div>'+
-  '<div class="paste-grid">'+
-  '<label class="form-field"><span>نوع العملية (إجباري)</span><select name="smsKind" id="smsKind">'+options(kinds,d.kind==="unclassified"?"":d.kind)+'</select></label>'+
-  '<label class="form-field"><span>المبلغ</span><input name="smsAmount" id="smsAmount" type="number" min="0.01" step="0.01" inputmode="decimal" value="'+esc(d.amount||"")+'"></label>'+
-  '<label class="form-field"><span>التاريخ</span><input name="smsDate" id="smsDate" type="date" value="'+esc(d.date)+'"></label>'+
-  '<label class="form-field"><span>البند أو التصنيف</span><input name="smsCategory" id="smsCategory" value="'+esc(d.category||"")+'"></label>'+
-  fieldRows.join("")+'</div>'+
-  '<div class="sms-card-hint">الشراء بالفيزا لا يحتاج حسابًا بنكيًا. سحب النقد من الفيزا يزيد الدين؛ إذا احتفظت بالنقد خارج حساباتك فلا تختَر حساب استقبال. السداد فقط يمكنه خصم الحساب البنكي.</div>'+
-  '<div class="buttons">'+button("تسجيل العملية بعد المراجعة","saveSms",null,"primary")+button("إلغاء التحليل","clearSms",null,"outline")+'</div>');
+ const undo=data.lastSmsMoveId&&data.moves.some(m=>m.id===data.lastSmsMoveId)?button("التراجع عن آخر تسجيل","undoLastSms",null,"outline"):"";
+ const info='<p class="sms-easy-help">ألصق رسالة البنك أو الفيزا. يسجّل البرنامج العمليات الواضحة تلقائيًا ويطلب توضيحًا فقط إذا لم يتعرف على الحساب أو البطاقة.</p>';
+ const input='<label class="sms-simple-field"><span>رسالة البنك أو الفيزا</span><textarea id="smsRaw" rows="'+(d?3:5)+'" spellcheck="false" placeholder="اضغط مطولًا هنا ثم لصق">'+esc(d?.raw||"")+'</textarea></label>';
+ if(!d)return panel("إدخال الرسائل — مكان واحد",info+input+
+  (smsStatus?'<div class="sms-result">'+esc(smsStatus)+'</div>':"")+
+  '<div class="buttons">'+button("قراءة الرسالة","analyzeSms",null,"primary")+undo+'</div>');
+ const kindLabels={charge:"شراء بالفيزا",cash_advance:"سحب نقدي من الفيزا",refund:"استرداد فيزا",repayment:"سداد فيزا أو قرض",expense:"مصروف بنكي",income:"دخل",profit:"أرباح دراهم",transfer:"تحويل بين حسابين",unclassified:"غير واضح"};
+ const k=d.kind,bankFrom=acc(d.from),bankTo=acc(d.to),card=debt(d.debtId),suspect=matchingMoneyMovement(k,num(d.amount),d.date,d.debtId,d.from);
+ const needsDetails=k==="unclassified"||!(num(d.amount)>0)||
+  (["charge","cash_advance","refund","repayment"].includes(k)&&!card)||
+  (["expense","repayment","transfer"].includes(k)&&!bankFrom)||
+  (["income","profit","transfer"].includes(k)&&!bankTo)||
+  (k==="cash_advance"&&!bankTo)||!!suspect;
+ const kinds=[["","اختر النوع"],["charge","شراء بالفيزا"],["cash_advance","سحب نقدي من الفيزا"],["refund","استرداد فيزا"],["repayment","سداد الفيزا من البنك"],["expense","مصروف من البنك"],["income","دخل وارد"],["transfer","تحويل بين حسابين"],["profit","ربح دراهم"]];
+ const fields='<div class="sms-short-fields"><label class="form-field"><span>نوع العملية</span><select name="smsKind" id="smsKind">'+options(kinds,k==="unclassified"?"":k)+'</select></label>'+
+ '<label class="form-field"><span>المبلغ</span><input name="smsAmount" type="number" min="0.01" step="0.01" value="'+esc(d.amount||"")+'"></label>'+
+ '<label class="form-field"><span>التاريخ</span><input name="smsDate" type="date" value="'+esc(d.date)+'"></label>'+
+ '<label class="form-field"><span>التصنيف</span><input name="smsCategory" value="'+esc(d.category||"")+'"></label>'+
+ '<label class="form-field" data-sms-row="debt"><span>اختر بطاقة الفيزا</span><select name="smsDebt">'+smsDebtOptions(d.debtId)+'</select></label>'+
+ '<label class="form-field" data-sms-row="from"><span>من أي حساب بنكي خرج المال؟</span><select name="smsFrom">'+smsBankOptions(d.from)+'</select></label>'+
+ '<label class="form-field" data-sms-row="to"><span>إلى أي حساب وصل المال؟</span><select name="smsTo">'+smsBankOptions(d.to)+'</select></label>'+
+ '<label class="form-field" data-sms-row="principal"><span>المبلغ الذي خفّض أصل الدين</span><input name="smsPrincipal" type="number" step="0.01" min="0" value="'+esc(d.amount||"")+'"></label>'+
+ '<label class="form-field" data-sms-row="paidElsewhere"><span>هل سُجل الخصم البنكي سابقًا؟</span><select name="smsPaidElsewhere"><option value="no">لا، اخصمه الآن من حساب البنك</option><option value="yes">نعم، لا تخصمه ثانية</option></select></label></div>';
+ const banner=!!suspect?'<p class="ledger-warning">وجدت حركة شبيهة بالمبلغ نفسه. راجع «مراجعة وتصحيح العمليات» قبل تسجيلها حتى لا يُكرر الخصم أو السداد.</p>':
+ '<p class="sms-review-hint">'+esc(d.reason)+'</p>';
+ return panel("توضيح قصير للرسالة",info+input+
+  '<div class="sms-preview"><strong>'+esc(kindLabels[k]||"عملية مالية")+' • '+money(d.amount||0)+'</strong><small>'+
+  esc(card?.name||bankFrom?.name||bankTo?.name||"لم يتحدد الحساب")+' • '+esc(d.date)+'</small></div>'+banner+
+  '<details id="smsReviewDetails" '+(needsDetails?'open':'')+'><summary>مراجعة المعلومات'+(needsDetails?' المطلوبة':' أو تعديلها')+'</summary>'+fields+'</details>'+
+  '<div class="buttons">'+button("تسجيل هذه العملية","saveSms",null,"primary")+button("إلغاء","clearSms",null,"outline")+undo+'</div>');
 }
 function updateSmsVisibility(){
- const kind=$("smsKind")?.value,host=$("content");
- if(!host||!kind&& !$("smsKind"))return;
- const hidePaid=kind==="repayment"&&host.querySelector?.('[name="smsPaidElsewhere"]')?.value==="yes";
- const show={from:["expense","transfer","repayment"].includes(kind)&&!hidePaid,
-  to:["income","profit","transfer","cash_advance"].includes(kind),
-  debt:["charge","cash_advance","refund","repayment"].includes(kind),
-  principal:kind==="repayment",paidElsewhere:kind==="repayment"};
+ const k=$("smsKind")?.value||smsDraft?.kind,host=$("content");if(!host||!$("smsKind"))return;
+ const paidElsewhere=host.querySelector?.('[name="smsPaidElsewhere"]')?.value==="yes";
+ const show={from:["expense","transfer","repayment"].includes(k)&&!(k==="repayment"&&paidElsewhere),
+  to:["income","profit","transfer","cash_advance"].includes(k),debt:["charge","cash_advance","refund","repayment"].includes(k),
+  principal:k==="repayment",paidElsewhere:k==="repayment"};
  host.querySelectorAll?.("[data-sms-row]").forEach(row=>{row.hidden=!show[row.dataset.smsRow]});
 }
-
+function acceptSms(parsed,fields={},automatic=false){
+ const kind=fields.kind??parsed.kind,sum=Number(fields.amount??parsed.amount),date=fields.date||parsed.date;
+ const from=fields.from??parsed.from??"",to=fields.to??parsed.to??"",debtId=fields.debtId??parsed.debtId??"";
+ const paidElsewhere=fields.paidElsewhere===true,principal=kind==="repayment"?Number(fields.principal??sum):0;
+ const cat=fields.category||parsed.category||"غير مصنف";
+ if(!kind||kind==="unclassified"||kind==="rejected"||!Number.isFinite(sum)||sum<=0||!/^20\d{2}-\d{2}-\d{2}$/.test(date))throw Error("نوع العملية أو المبلغ أو التاريخ غير واضح");
+ if(isSameSms(parsed.raw,parsed))throw Error("الرسالة محفوظة سابقًا، ولم يتغير أي رصيد");
+ if(matchingMoneyMovement(kind,sum,date,debtId,from))throw Error("عملية مشابهة موجودة بالمبلغ والتاريخ. راجع سجل العمليات قبل إعادة التسجيل.");
+ const bankOut=["expense","transfer"].includes(kind)||kind==="repayment"&&!paidElsewhere;
+ const entry={id:uid(),date,kind,amount:sum,from:bankOut?from:"",to:["income","profit","transfer","cash_advance"].includes(kind)?to:"",
+ debtId:["repayment","charge","cash_advance","refund"].includes(kind)?debtId:"",
+ principal,bankAlreadyPosted:kind==="repayment"&&paidElsewhere,category:cat,raw:parsed.raw,source:"sms-paste",smsImported:true,
+ note:automatic?"صُنفت تلقائيًا من الرسالة":"صُنفت بعد مراجعة الرسالة",posted:true};
+ if(["expense","transfer"].includes(kind)&&!acc(from)||["income","profit","transfer"].includes(kind)&&!acc(to)||
+  kind==="cash_advance"&&to&&!acc(to)||kind==="transfer"&&from===to)throw Error("تأكد من الحساب البنكي الصادر والمستقبل");
+ if(["charge","cash_advance","refund"].includes(kind)&&debt(debtId)?.kind!=="credit")throw Error("اختر بطاقة الفيزا الصحيحة");
+ if(kind==="repayment"&&(!debt(debtId)||!Number.isFinite(principal)||principal<0||principal>sum||!paidElsewhere&&!acc(from)))throw Error("حدد الفيزا والحساب المسدد أو أكد أن الخصم البنكي سُجل سابقًا");
+ if(["refund","repayment"].includes(kind)&&(kind==="refund"?sum:principal)>debtsBalance(debt(debtId))+.005&&!confirm("الاسترداد أو سداد الأصل يتجاوز الرصيد المسجل للبطاقة. هل تؤكد صحة الكشف؟"))return false;
+ if(kind==="cash_advance"&&!to&&!confirm("لم تحدد مكان النقد المستلم من الفيزا. هل تريد تسجيل زيادة الدين فقط؟"))return false;
+ if(bankOut&&accountBalance(acc(from))+.005<sum&&!confirm("رصيد البنك الظاهر أقل من المبلغ. هل تأكدت أن الخصم خرج من الحساب لا من الفيزا؟"))return false;
+ if(kind==="repayment"&&debt(debtId).kind==="loan"&&principal===sum&&!confirm("هل قسط القرض كله أصل دين، دون فوائد؟"))return false;
+ if(automatic&&!smsCanAutoPost(parsed))throw Error("العملية تحتاج مراجعة");
+ const oldHash=window.FinanceImport.hash(window.FinanceImport.normalize(parsed.raw));
+ entry.smsHashes=[oldHash,parsed.hash];
+ if(!data.seenHashes)data.seenHashes={};
+ data.moves.push(entry);
+ data.seenHashes[oldHash]=1;data.seenHashes[parsed.hash]=1;
+ data.lastSmsMoveId=entry.id;period=date.slice(0,7);smsDraft=null;
+ smsStatus="✓ "+moveName(entry)+" "+money(sum)+(entry.debtId?" • "+(debt(entry.debtId)?.name||""):"")+". تم الحفظ مرة واحدة. استخدم «التراجع» إذا كانت العملية غير صحيحة.";
+ keep();
+ return true;
+}
+function processIncomingSms(raw){
+ const str=String(raw||"").trim();if(!str)return;
+ const d=window.BankSMS?.parse(str,data);
+ if(!d)throw Error("تعذر قراءة الرسالة");
+ if(d.kind==="rejected"){smsDraft=null;smsStatus="الرسالة لعملية مرفوضة؛ لم يتغير أي رصيد.";render();return}
+ if(isSameSms(str,d)){smsDraft=null;smsStatus="هذه الرسالة مسجلة من قبل، ولم تُكرر العملية.";render();return}
+ smsDraft=d;smsStatus="";
+ if(smsCanAutoPost(d)){acceptSms(d,{},true);return}
+ render();
+}
 function analyzeSMS(){
  const raw=$("smsRaw")?.value?.trim()||"";
- if(!raw)throw Error("ألصق نص رسالة البنك أو البطاقة أولًا");
- const parsed=window.BankSMS?.parse(raw,data);
- if(!parsed)throw Error("تعذر تشغيل قارئ الرسائل البنكية");
- if(parsed.kind==="rejected")throw Error("هذه رسالة لعملية مرفوضة؛ لا توجد حركة مالية تُسجّل");
- const oldHash=window.FinanceImport.hash(window.FinanceImport.normalize(raw));
- const normalizedHash=parsed.hash;
- const already=!!(data.seenHashes[oldHash]||data.seenHashes[normalizedHash]||data.moves.some(m=>m.raw&&window.FinanceImport.normalize(m.raw)===window.FinanceImport.normalize(raw)));
- if(already)throw Error("هذه الرسالة محفوظة سابقًا في النسخة الشاملة أو سجل العمليات. لم يتغير أي رصيد.");
- smsDraft=parsed;smsStatus="";render();
+ if(!raw)throw Error("ألصق رسالة البنك أولًا");
+ processIncomingSms(raw);
 }
 function saveSMS(){
- if(!smsDraft)throw Error("حلّل الرسالة أولًا");
+ if(!smsDraft)throw Error("لا توجد رسالة بحاجة إلى مراجعة");
  const v=name=>$("content").querySelector('[name="'+name+'"]')?.value||"";
- const kind=v("smsKind"),sum=Number(v("smsAmount")),date=v("smsDate"),from=v("smsFrom"),to=v("smsTo"),debtId=v("smsDebt");
- const paidElsewhere=v("smsPaidElsewhere")==="yes",principal=Number(v("smsPrincipal")),category=v("smsCategory").trim()||"غير مصنف";
- if(!(sum>0)||!Number.isFinite(sum)||!/^20\d{2}-\d{2}-\d{2}$/.test(date))throw Error("أدخل مبلغًا موجبًا وتاريخًا صحيحًا");
- if(!["income","expense","transfer","charge","cash_advance","refund","repayment","profit"].includes(kind))throw Error("اختر نوع العملية صراحة ولا تحفظها كمصروف بنكي افتراضي");
- if(["expense","transfer"].includes(kind)&&!acc(from))throw Error("حدد الحساب البنكي الذي خرج منه المبلغ");
- if(["income","profit","transfer"].includes(kind)&&!acc(to))throw Error("حدد الحساب الذي استلم المبلغ");
- if(kind==="cash_advance"&&to&&!acc(to))throw Error("حساب استلام النقد غير معروف");
- if(kind==="transfer"&&from===to)throw Error("اختر حسابين مختلفين");
- if(["charge","cash_advance","refund"].includes(kind)&&debt(debtId)?.kind!=="credit")throw Error("اختر بطاقة فيزا صحيحة — لا تختَر حساب نزول الراتب");
- if(kind==="repayment"&&(!debt(debtId)||!Number.isFinite(principal)||principal<0||principal>sum||!paidElsewhere&&!acc(from)))throw Error("اختر الدين وحساب السداد أو أكد أن الخصم البنكي سبق تسجيله، مع إدخال أصل الدين");
- if(kind==="repayment"&&debt(debtId).kind==="loan"&&principal===sum&&!confirm("للقرض: هل انخفض أصل الدين بكامل مبلغ القسط رغم احتمال وجود فوائد؟"))return;
- if(["refund","repayment"].includes(kind)&&num(kind==="refund"?sum:principal)>debtsBalance(debt(debtId))+.005&&!confirm("المبلغ أكبر من رصيد الدين الظاهر. قد يكون رصيد البطاقة أحدث من سجل البرنامج؛ هل تؤكد العملية؟"))return;
- const raw=smsDraft.raw,oldHash=window.FinanceImport.hash(window.FinanceImport.normalize(raw));
- if(data.seenHashes[oldHash]||data.seenHashes[smsDraft.hash]||data.moves.some(m=>m.raw&&window.FinanceImport.normalize(m.raw)===window.FinanceImport.normalize(raw)))throw Error("هذه الرسالة مسجلة سابقًا؛ تم منع التكرار");
- if(smsDraft.kind==="unclassified"&&!confirm("صيغة الرسالة لم تُعرف. هل راجعت نوع الحركة والفيزا والحساب يدويًا؟"))return;
- if(["charge","cash_advance","refund"].includes(smsDraft.kind)&&["expense","transfer"].includes(kind)&&!confirm("تحذير: تحليل الرسالة يرجّح أنها عملية فيزا وليست خصمًا من الحساب البنكي. هل تأكدت من كشف الحساب أن المبلغ خرج من البنك؟"))return;
- const bankOut=["expense","transfer"].includes(kind)||kind==="repayment"&&!paidElsewhere;
- if(bankOut&&acc(from)&&accountBalance(acc(from))+.005<sum&&!confirm("الرصيد المسجل أقل من قيمة هذه الحركة البنكية. هل تريد المتابعة؟"))return;
- if(kind==="cash_advance"&&!to&&!confirm("السحب النقدي من الفيزا سيزيد دين البطاقة، لكن النقد المستلم لن يدخل أي حساب مسجل. هل تريد المتابعة؟"))return;
- const entry={id:uid(),date,kind,amount:sum,from:bankOut?from:"",to:["income","profit","transfer","cash_advance"].includes(kind)?to:"",
-  debtId:["repayment","charge","cash_advance","refund"].includes(kind)?debtId:"",principal:kind==="repayment"?principal:0,
-  bankAlreadyPosted:kind==="repayment"&&paidElsewhere,category,raw,note:"مُدخل باللصق بعد مراجعة المستخدم",posted:true,source:"sms-paste",smsImported:true,smsHashes:[oldHash,smsDraft.hash]};
- data.moves.push(entry);
- data.seenHashes[oldHash]=1;data.seenHashes[smsDraft.hash]=1;
- data.lastSmsMoveId=entry.id;
- period=date.slice(0,7);
- smsDraft=null;smsStatus="تم تسجيل "+money(sum)+" كـ«"+moveName(entry)+"». يمكنك التراجع عن آخر رسالة من الزر أدناه.";
- keep();
+ const kind=v("smsKind"),a=Number(v("smsAmount")),principal=Number(v("smsPrincipal")||a);
+ const f={kind,amount:a,date:v("smsDate"),category:v("smsCategory"),debtId:v("smsDebt"),from:v("smsFrom"),to:v("smsTo"),
+  principal,paidElsewhere:v("smsPaidElsewhere")==="yes"};
+ if(smsDraft.kind==="unclassified"&&!confirm("نوع الرسالة لم يتضح تلقائيًا؛ هل راجعت نوع العملية والجهات قبل تسجيلها؟"))return;
+ acceptSms(smsDraft,f,false);
 }
+
 function contentBudgetHistory(){
  const xs=Object.entries(data.legacy?.budgetMonths||{}).sort((a,b)=>b[0].localeCompare(a[0]));
  if(!xs.length)return panel("الأشهر القديمة",blank("لم يُستورد سجل شهور سابق بعد"));
@@ -820,6 +861,13 @@ $("monthNav").addEventListener("change",e=>{if(e.target.value)period=e.target.va
 $("prevMonth").addEventListener("click",()=>{period=changeMonth(period,"prev");render()});
 $("nextMonth").addEventListener("click",()=>{period=changeMonth(period,"next");render()});
 $("quickAction").addEventListener("click",()=>{page="moves";sub="paste";smsDraft=null;smsStatus="";render();});
+$("content").addEventListener("paste",e=>{
+ if(e.target?.id!=="smsRaw")return;
+ const value=e.clipboardData?.getData("text")||"";
+ if(!value)return;
+ e.preventDefault();
+ try{processIncomingSms(value)}catch(err){smsDraft=null;smsStatus="تعذر التسجيل: "+err.message;render()}
+});
 $("content").addEventListener("change",e=>{
  if(e.target.id==="auditAccount"){accountPick=e.target.value;render();}
  else if(e.target.id==="smsKind"||e.target.id==="smsPaidElsewhere"){updateSmsVisibility();}
