@@ -316,7 +316,7 @@ function contentAccountFunding(){
  '<span class="fund-state">'+(fundedItems(account).length===0?"لا توجد بنود مخصصة لهذا الحساب":isAccountConfirmed(account)?"✓ تم تأكيد تنفيذ البند في الميزانية":"لم يتم تأكيد البند في الميزانية")+'</span>'+
  '<div class="hint">المطلوب تحويله لهذا الحساب: <b>'+money(fundedAmount(account))+'</b></div>'+
  '<div class="compact-list">'+fundedItems(account).map(x=>'<div class="list-row"><div><b>'+esc(x.name)+'</b><small>'+ (x.paid?"✓ تم تنفيذ البند":"○ لم يؤكد تنفيذ البند")+'</small></div><b>'+money(x.amount)+'</b></div>').join("")+'</div>'+
-  (fundedItems(account).length?button(isAccountConfirmed(account)?"إلغاء تأكيد هذا الحساب":"تأكيد تحويل هذا الحساب","toggleAccountFunding",account.id,isAccountConfirmed(account)?"outline":"primary"):"")+button("تعديل الحساب الفرعي","editAccount",account.id,"outline")+button("مراجعة الحركات المؤثرة في الرصيد","reviewAccount",account.id,"primary"):"")+'</div>';
+  (fundedItems(account).length?button(isAccountConfirmed(account)?"إلغاء تأكيد هذا الحساب":"تأكيد تحويل هذا الحساب","toggleAccountFunding",account.id,isAccountConfirmed(account)?"outline":"primary"):"")+button("تعديل الرصيد الفعلي والحساب","editAccount",account.id,"primary"):"")+'</div>';
  const oldText=matching.length?'<p class="hint">من ميزانية V8 القديمة: '+matching.map(x=>esc(x.name)+" — "+(x.confirmed?"تم تأكيد المجموعة":"لم تؤكد المجموعة")).join(" • ")+'</p>':"";
  const names=groups.map(g=>{
   const active=g.children.filter(a=>fundedItems(a).length),complete=active.length>0&&active.every(isAccountConfirmed);
@@ -417,13 +417,13 @@ function accountDelta(a,m){
 function recentMovements(xs,limit=100){
  return xs.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.id).localeCompare(String(a.id))).slice(0,limit);
 }
-function movementRows(xs,empty){
+function movementRows(xs,empty,readOnly=false){
  return entryList(xs.map(m=>({
   title:moveName(m)+" • "+(m.category||"بدون تصنيف"),
   subtitle:m.date+" • "+moveAccounts(m)+(m.raw?" • من رسالة مُلصقة":"")+
    (m.importedHistory?" • حركة مستوردة ضمن الرصيد المرجعي":""),
   value:money(m.amount),negative:["expense","charge"].includes(m.kind),
-  tag:m.importedHistory?"مستوردة":"",actions:m.importedHistory?"":button("تصحيح العملية","editMove",m.id,"mini")+
+  tag:m.importedHistory?"مستوردة":"",actions:(m.importedHistory||readOnly)?"":button("تصحيح العملية","editMove",m.id,"mini")+
     button("إلغاء الحركة","deleteMove",m.id,"mini danger")
  })),empty);
 }
@@ -444,7 +444,7 @@ function contentAccountAudit(){
    box("الخصومات",outflow,"حركات فعالة بعد الاستيراد","coral"),
    box("تسوية الرصيد",Number(a.balanceAdjustment||0),"تصحيح مباشر لقيمة الرصيد الحالية","violet"),
    box("الرصيد الفعلي",balance,"المرجعي + الحركات + التسوية",balance<0?"coral":"blue")])+
-  warning+movementRows(list,"لا توجد حركات جديدة تؤثر في هذا الحساب")+
+  warning+'<div class="buttons">'+button("تعديل الرصيد الحالي لهذا الحساب","editAccount",a.id,"primary")+'</div>'+movementRows(list,"لا توجد حركات جديدة تؤثر في هذا الحساب",true)+
   '<p class="body-note">لتحديث الرصيد مباشرة افتح «تعديل الحساب» واكتب الرقم الحقيقي من البنك؛ سيظهر الرقم نفسه بعد الحفظ. وتبقى الحركات القديمة محفوظة للمراجعة عند الحاجة.</p>');
 }
 function contentLedgerReview(){
