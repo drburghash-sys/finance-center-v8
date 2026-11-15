@@ -347,6 +347,66 @@ function contentBudget(){
 }
 function moveName(m){return ({income:"دخل",expense:"مصروف",transfer:"تحويل بين حسابين",repayment:"سداد دين",charge:"شراء بالفيزا",cash_advance:"سحب نقدي من فيزا",refund:"استرداد فيزا",profit:"ربح استثماري"})[m.kind]||m.legacyType||"حركة"}
 function moveAccounts(m){return ["charge","cash_advance","refund"].includes(m.kind)?(debt(m.debtId)?.name||"فيزا")+(m.to?" ← "+(acc(m.to)?.name||""):""):m.kind==="repayment"?(m.bankAlreadyPosted?"خصم بنكي سبق تسجيله":"من "+(acc(m.from)?.name||"حساب"))+" ← "+(debt(m.debtId)?.name||"دين"):(acc(m.from)?.name||"")+(m.to?" ← "+(acc(m.to)?.name||""):"")}
+// Review is intentionally read-only until the user edits or cancels an explicit posted movement.
+function accountDelta(a,m){
+ if(m.posted===false)return 0;
+ return (m.to===a.id?num(m.amount):0)-(m.from===a.id&&!m.bankAlreadyPosted?num(m.amount):0);
+}
+function recentMovements(xs,limit=100){
+ return xs.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.id).localeCompare(String(a.id))).slice(0,limit);
+}
+function movementRows(xs,empty){
+ return entryList(xs.map(m=>({
+  title:moveName(m)+" • "+(m.category||"بدون تصنيف"),
+  subtitle:m.date+" • "+moveAccounts(m)+(m.raw?" • من رسالة مُلصقة":"")+
+   (m.importedHistory?" • حركة مستوردة ضمن الرصيد المرجعي":""),
+  value:money(m.amount),negative:["expense","charge"].includes(m.kind),
+  tag:m.importedHistory?"مستوردة":"",actions:m.importedHistory?"":button("تصحيح العملية","editMove",m.id,"mini")+
+    button("إلغاء الحركة","deleteMove",m.id,"mini danger")
+ })),empty);
+}
+function contentAccountAudit(){
+ const choices=data.accounts.filter(x=>["bank","reserve","cash","investment"].includes(x.role));
+ if(!choices.length)return panel("مراجعة الحساب",blank("لا توجد حسابات"));
+ const a=choices.find(x=>x.id===accountPick)||choices[0];
+ accountPick=a.id;
+ const list=recentMovements(data.moves.filter(m=>(m.from===a.id||m.to===a.id)&&m.posted!==false));
+ const inflow=list.reduce((z,m)=>z+(m.to===a.id?num(m.amount):0),0);
+ const outflow=list.reduce((z,m)=>z+(m.from===a.id&&!m.bankAlreadyPosted?num(m.amount):0),0);
+ const balance=accountBalance(a);
+ const selectHtml='<label class="form-field"><span>اختر الحساب الذي تريد تدقيق رصيده</span><select id="auditAccount">'+options(choices.map(x=>[x.id,bankGroup(x)+" — "+x.name]),a.id)+'</select></label>';
+ const warning=balance<-.005?'<p class="ledger-warning">الرصيد سالب. راجع العمليات أدناه، خصوصًا أي شراء بالفيزا سُجل على أنه مصروف بنكي. لا تعدّل الرصيد الافتتاحي لتغطية الخصم الخاطئ.</p>':"";
+ return panel("مراجعة حركة الحساب — "+a.name,selectHtml+
+  stats([box("الافتتاحي",num(a.opening),"كما حفظته دون تعديل","blue"),
+   box("الحركات الواردة",inflow,"حركات فعالة بعد الاستيراد","violet"),
+   box("الخصومات",outflow,"حركات فعالة بعد الاستيراد","coral"),
+   box("الرصيد المحسوب",balance,"الافتتاحي + الوارد − الصادر",balance<0?"coral":"blue")])+
+  warning+movementRows(list,"لا توجد حركات جديدة تؤثر في هذا الحساب")+
+  '<p class="body-note">إذا كان هناك خصم ٣٦٠ ريالًا لم يخرج من الحساب فعلًا، اختر «تصحيح العملية»، ثم غيّر نوعها إلى «شراء بالفيزا» واختر البطاقة. سيلغى أثرها البنكي وينتقل إلى رصيد دين الفيزا. وإذا كانت غير صحيحة بالكامل، اختر «إلغاء الحركة».</p>');
+}
+function contentLedgerReview(){
+ const actual=data.moves.filter(m=>m.posted!==false&&!m.importedHistory);
+ const suspects=recentMovements(actual.filter(m=>
+   (["expense","transfer"].includes(m.kind)&&/فيزا|visa|بطاقة\s*ائتمان|credit\s*card/i.test((m.category||"")+" "+(m.raw||"")+" "+(m.note||"")))||
+   (["charge","cash_advance","refund","repayment"].includes(m.kind)&&!debt(m.debtId))||
+   (m.kind==="repayment"&&!m.principal)||(["expense","transfer","repayment"].includes(m.kind)&&m.from&&!acc(m.from))
+ ),40);
+ const negatives=data.accounts.filter(a=>accountBalance(a)<-.005&&["bank","reserve","cash"].includes(a.role));
+ const cancelled=(data.voidedMoves||[]).slice(-20).reverse();
+ return panel("فحص سلامة الأرصدة والتصنيف",
+   stats([box("حركات فعلية جديدة",actual.length,"لا تشمل حركات الاستيراد المرجعية","blue"),
+    box("حركات للمراجعة",suspects.length,"يجب التحقق منها يدويًا قبل التصحيح","amber"),
+    box("حسابات ذات رصيد سالب",negatives.length,"قد يكون نقص بيانات أو تصنيف خاطئ","coral")])+
+   (negatives.length?'<p class="ledger-warning">حسابات سالبة: '+negatives.map(a=>esc(a.name)+" ("+money(accountBalance(a))+")").join("، ")+'</p>':"")+
+   '<p class="body-note">المشتريات بالفيزا تزيد دين البطاقة، وليس خصم البنك. يمكن تصحيح حركة قائمة دون تغيير رصيد افتتاحي. الإجراءات أدناه لا تمس الحركات التاريخية المستوردة.</p>'+
+   '<h3>عمليات يُحتمل أنها مصنفة خطأ</h3>'+movementRows(suspects,"لم أجد تصنيفًا مشتبهًا به حسب القواعد الآلية")+
+   '<h3>جميع الحركات الجديدة — الأحدث أولًا</h3>'+movementRows(recentMovements(actual,100),"لم تسجل حركات جديدة")+
+   '<h3>الحركات الملغاة — يمكن استعادتها</h3>'+
+   entryList(cancelled.map(z=>{const m=z.move||{};return{title:moveName(m)+" • "+(m.category||""),
+    subtitle:m.date+" • أُلغيت في "+(z.at||""),value:money(m.amount),
+    actions:button("استعادة الحركة","restoreMove",m.id,"mini")}}),"لا توجد عمليات أُلغيت")+
+   '<p class="body-note">تُحفظ نسخة من الحركة الملغاة داخل بيانات هذا الجهاز ونسختك الاحتياطية للتدقيق أو الاستعادة. لا يُرسل أي شيء إلى GitHub.</p>');
+}
 function contentMoves(){
  if(sub==="paste")return contentSMS();
  if(sub==="review")return contentLedgerReview();
@@ -493,6 +553,7 @@ function render(){
  $("quickAction").textContent=["accounts","moves","debts"].includes(page)?"＋ لصق رسالة":"＋ حركة جديدة";
  let html=page==="home"?contentHome():page==="accounts"?contentAccounts():page==="budget"?contentBudget():page==="moves"?contentMoves():page==="obligations"?contentObligations():page==="debts"?contentDebts():page==="investments"?contentInvestment():page==="projects"?contentProjects():page==="salary"?contentSalary():page==="forecast"?(window.RetirementApp?.render(data,sub)||blank("وحدة التقاعد غير متاحة")):page==="charts"?contentChart():contentData();
  $("content").innerHTML=html;
+ updateSmsVisibility();
  $("storageStatus").textContent=data.moves.length+" حركة مسجلة • "+data.accounts.length+" حساب"+(data.legacy?.bankHistoryCount?" • "+data.legacy.bankHistoryCount+" تاريخية":"");
 }
 function field(label,name,value,type,extras){return '<label class="form-field"><span>'+esc(label)+'</span><input name="'+esc(name)+'" type="'+(type||"text")+'" '+(type==="number"?'min="0" step="any" inputmode="decimal"':"")+' value="'+esc(value==null?"":value)+'" '+(extras||"")+'></label>'}
@@ -654,15 +715,29 @@ function saveForm(form){
 function removeRecord(type,id){
  const table={Account:"accounts",Budget:"budget",Commitment:"commitments",Debt:"debts",Project:"projects",Move:"moves"};
  const key=table[type],row=data[key]?.find(x=>x.id===id);
- if(!row)return;
- if(type==="Move"&&row.importedHistory)throw Error("الحركة التاريخية محفوظة ضمن الرصيد المستورد. لا تحذفها كحركة جديدة؛ عدّل تصنيفها فقط من سجل المراجعة.");
- if(type==="Account"&&data.moves.some(x=>x.from===id||x.to===id))throw Error("الحساب مرتبط بحركات فعلية. عدّل الحركات أو انقلها أولًا.");
- if(type==="Debt"&&data.moves.some(x=>x.debtId===id))throw Error("الدين مرتبط بسداد أو مشتريات مثبتة؛ لا يمكن حذفه قبل معالجة الحركات.");
- if(type==="Project"&&data.moves.some(x=>x.projectId===id))throw Error("المشروع مرتبط بحركات فعلية؛ احفظها أو انقلها قبل الحذف.");
- if(type==="Commitment"&&data.moves.some(x=>String(x.commitmentKey||"").startsWith(id+"-")))throw Error("هذا الالتزام له دفعات مدفوعة فعلًا. يمكنك إيقافه بدل حذفه.");
- if(!confirm("حذف "+(row.name||row.category||row.kind||"هذا السجل")+"؟ ستنعكس العملية على الأرصدة والحسابات تلقائيًا."))return;
+ if(!key||!row)return;
+ if(type==="Move"&&row.importedHistory)throw Error("الحركة القديمة مدرجة في الرصيد المستورد؛ لا يمكن حذفها دون إعادة تسوية الرصيد المرجعي.");
+ if(type==="Account"&&data.moves.some(x=>x.from===id||x.to===id))throw Error("الحساب مرتبط بحركات فعلية. لا تحذفه قبل تصحيح العمليات.");
+ if(type==="Debt"&&data.moves.some(x=>x.debtId===id))throw Error("هناك عمليات فيزا/قرض مرتبطة بهذا الدين؛ لا تحذفه أولًا.");
+ if(type==="Project"&&data.moves.some(x=>x.projectId===id))throw Error("المشروع له عمليات مثبتة؛ لا تحذفه قبل مراجعتها.");
+ if(type==="Commitment"&&data.moves.some(x=>String(x.commitmentKey||"").startsWith(id+"-")))throw Error("الاستحقاق له مدفوعات؛ أوقفه بدل حذفه.");
+ const msg=type==="Move"?"إلغاء حركة "+money(row.amount)+" من "+(row.date||"")+"؟ ستُعكس آثارها على الحساب والفيزا، ويمكن استعادتها من سجل المراجعة.":"حذف "+(row.name||row.category||row.kind||"هذا السجل")+"؟";
+ if(!confirm(msg))return;
+ if(type==="Move"){
+  if(!Array.isArray(data.voidedMoves))data.voidedMoves=[];
+  data.voidedMoves.push({at:new Date().toISOString(),move:JSON.parse(JSON.stringify(row))});
+  if(data.lastSmsMoveId===id)data.lastSmsMoveId="";
+  // Allow a corrected version of a cancelled pasted SMS to be imported again.
+  const hs=new Set(row.smsHashes||[]);
+  if(row.source==="sms-paste"&&row.raw&&window.FinanceImport&&window.BankSMS){
+   hs.add(window.FinanceImport.hash(window.FinanceImport.normalize(row.raw)));
+   hs.add(window.BankSMS.hash(window.BankSMS.normalize(row.raw).replace(/[–—]/g,"-").replace(/\s+/g," ")));
+  }
+  for(const h of hs)if(!data.moves.some(x=>x.id!==id&&(x.smsHashes||[]).includes(h)))delete data.seenHashes[h];
+ }
  data[key]=data[key].filter(x=>x.id!==id);keep();
 }
+
 function closeModal(){$("dialog").hidden=true;$("dialog").setAttribute("aria-hidden","true");modalType="";editingId="";}
 function download(){
  const blob=new Blob([JSON.stringify({app:"BMSActualFinance",version:1,exportedAt:new Date().toISOString(),data},null,2)],{type:"application/json;charset=utf-8"});
@@ -747,7 +822,9 @@ $("quickAction").addEventListener("click",()=>{
   else editor("expense");
 });
 $("content").addEventListener("change",e=>{
- if(e.target.id==="fundBank"){bankPick=e.target.value;accountPick="";render();}
+ if(e.target.id==="auditAccount"){accountPick=e.target.value;render();}
+ else if(e.target.id==="smsKind"||e.target.id==="smsPaidElsewhere"){updateSmsVisibility();}
+ else if(e.target.id==="fundBank"){bankPick=e.target.value;accountPick="";render();}
  else if(e.target.id==="fundAccount"){accountPick=e.target.value;render();}
  else if(e.target.id==="obligationForecastBase"){
   if(!data.obligationForecast)data.obligationForecast={};
@@ -762,6 +839,21 @@ $("content").addEventListener("click",e=>{
  const target=e.target.closest("[data-action]");if(!target)return;
  const action=target.dataset.action;
  const m={newAccount:"account",newBudget:"budget",newCommitment:"commitment",newDebt:"debt",newProject:"project",newInvestmentAccount:"account",newMove:"expense",newExpense:"expense",newTransfer:"transfer",newRepayment:"repayment",newProfit:"profit"};
+ if(action==="reviewAccount"){if(target.dataset.id)accountPick=target.dataset.id;page="accounts";sub="review";render();return;}
+ if(action==="reviewLedger"){page="moves";sub="review";render();return;}
+ if(action==="undoLastSms"){
+  const id=data.lastSmsMoveId;const m=data.moves.find(x=>x.id===id);
+  if(!m){alert("لا توجد رسالة يمكن التراجع عنها");return;}
+  try{removeRecord("Move",id)}catch(err){alert(err.message)}return;
+ }
+ if(action==="restoreMove"){
+  const id=target.dataset.id,z=(data.voidedMoves||[]).find(x=>x.move?.id===id);
+  if(!z){alert("لم أجد نسخة الحركة الملغاة");return;}
+  if(data.moves.some(x=>x.id===id)){alert("الحركة موجودة بالفعل");return;}
+  if(!confirm("استعادة الحركة "+money(z.move.amount)+"؟ ستؤثر في البنك أو الفيزا بحسب نوعها المسجل."))return;
+  data.moves.push(z.move);data.voidedMoves=data.voidedMoves.filter(x=>x.move?.id!==id);
+  (z.move.smsHashes||[]).forEach(h=>data.seenHashes[h]=1);keep();return;
+ }
  if(action==="showObligationForecast"){page="obligations";sub="forecast";render();return;}
  if(action==="projectForecasts"){page="projects";sub="forecasts";render();return;}
  if(action==="newInvestmentAccount"){editor("account");const role=$("editorForm").querySelector('[name="role"]');if(role)role.value="investment";return;}
@@ -871,7 +963,17 @@ $("content").addEventListener("click",e=>{
  }
 });
 $("dialog").addEventListener("click",e=>{if(e.target===$("dialog")||e.target.closest('[data-action="close"]'))closeModal()});
-$("editorForm").addEventListener("change",e=>{if(e.target.name==="kind"){const kind=e.target.value;const old=$("editorForm").querySelector('[name="amount"]')?.value;const preserveId=editingId;editor(kind,preserveId);if(old)$("editorForm").querySelector('[name="amount"]').value=old;}});
+$("editorForm").addEventListener("change",e=>{
+ if(e.target.name==="kind"){
+  const kind=e.target.value,values={};
+  $("editorForm").querySelectorAll("[name]").forEach(el=>{values[el.name]=el.value});
+  const preserveId=editingId;
+  editor(kind,preserveId);
+  $("editorForm").querySelectorAll("[name]").forEach(el=>{if(el.name!=="kind"&&values[el.name]!=null)el.value=values[el.name]});
+  const p=$("editorForm").querySelector('[name="principal"]');
+  if(p&&!p.value&&values.amount&&debt($("editorForm").querySelector('[name="debtId"]')?.value)?.kind==="credit")p.value=values.amount;
+ }
+});
 $("editorForm").addEventListener("submit",e=>{e.preventDefault();try{saveForm(e.target)}catch(err){alert(err.message)}});
 document.addEventListener("change",async e=>{
  if(e.target.id!=="importFile")return;
