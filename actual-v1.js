@@ -500,7 +500,7 @@ function select(label,name,items,selected,empty){return '<label class="form-fiel
 function editor(kind,id){
  modalType=kind;editingId=id||"";
  let title="",inner="",date=field("تاريخ العملية","date",now(),"date"),amount=field("المبلغ بالريال","amount","","number",'required');
- if(kind==="account"){title="إضافة حساب حقيقي";inner=field("اسم الحساب","name","","text","required")+field("اسم البنك أو الجهة","bank")+field("آخر أربعة أرقام (اختياري)","last4")+field("بطاقات مدى المرتبطة (آخر ٤ أرقام، افصل بفاصلة)","cardsText")+field("الرصيد الافتتاحي قبل الحركات","opening","0","number","required")+select("نوع الحساب","role",[["bank","حساب بنكي"],["reserve","حساب الالتزامات (ادخار)"],["investment","محفظة استثمارية"]],"bank");}
+ if(kind==="account"){title="إضافة حساب حقيقي";inner=field("اسم الحساب","name","","text","required")+field("اسم البنك أو الجهة","bank")+field("آخر أربعة أرقام (اختياري)","last4")+field("بطاقات مدى المرتبطة (آخر ٤ أرقام، افصل بفاصلة)","cardsText")+field("الرصيد الافتتاحي قبل الحركات","opening","0","number","required")+select("نوع الحساب","role",[["bank","حساب بنكي"],["reserve","حساب الالتزامات (ادخار)"],["investment","محفظة استثمارية"],["cash","نقد في اليد / محفظة نقدية"]],"bank");}
  else if(kind==="budgetSalary"){title="تعديل الراتب المخطط لشهر "+period;inner=field("الشهر","month",period,"month","readonly")+field("الراتب المخطط","salary",incomePlanForMonth(period).salary,"number","required");}
  else if(kind==="budgetIncome"){title=editingId?"تعديل دخل إضافي":"إضافة دخل آخر";inner=field("الشهر","month",period,"month","readonly")+field("مصدر الدخل (مثال: أرباح دراهم)","name","","text","required")+field("المبلغ المتوقع لهذا الشهر","amount","","number","required");}
  else if(kind==="budget"){title="إضافة بند ميزانية";inner=field("الشهر","month",period,"month","required")+field("اسم البند","name","","text","required")+field("المخصص للشهر","amount","","number","required")+select("نوع التخصيص","type",[["expense","مصروف مخطط"],["debt","قسط دين مخطط"],["saving","تحويل ادخار للالتزامات"],["investment","استثمار مخطط"]],"expense")+select("البنك / الحساب المخصص لتنفيذ هذا البند","bankAccountId",data.accounts.filter(a=>a.role==="bank"||a.role==="reserve"||a.role==="investment").map(a=>[a.id,bankGroup(a)+" — "+a.name]),"","غير محدد (يرجى الاختيار)");}
@@ -517,24 +517,28 @@ function editor(kind,id){
   select("هل مبلغ الالتزامات من المشروع داخل ادخار الميزانية بالفعل؟","profitInBudget",[["false","لا — مبلغ إضافي للالتزامات"],["true","نعم — لا تكرر احتسابه"]],"false")+
   '<p class="hint">الربح الصافي بعد تكاليف المشروع، والمبلغ المخصص للالتزامات لا يجوز أن يتجاوز الربح. لا تضف الربح إلى مصروفات الميزانية؛ إن كان مدرجًا بالدخل الإضافي سنستبعد تكراره من توقع الالتزامات.</p>';}
  else {
-  const kinds=[["income","دخل"],["expense","مصروف فعلي"],["transfer","تحويل بين حسابين"],["repayment","سداد قرض أو فيزا"],["charge","شراء بالفيزا"],["profit","ربح دراهم مستلم"]];
-  title="تسجيل حركة حقيقية";
+  const kinds=[["income","دخل إلى حساب"],["expense","مصروف فعلي من البنك"],["transfer","تحويل بين الحسابات"],["charge","شراء بالفيزا — دون خصم بنكي"],["cash_advance","سحب نقدي من فيزا — يزيد الدين"],["refund","استرداد إلى الفيزا — ينقص الدين"],["repayment","سداد فيزا أو قرض"],["profit","ربح دراهم مستلم"]];
+  title=editingId?"تصحيح حركة مالية مسجلة":"تسجيل حركة مالية";
   inner=select("نوع الحركة","kind",kinds,kind==="move"?"expense":kind)+date+amount;
-  const from=select("الحساب الذي خرج منه المبلغ","from",getAccounts(),"","اختر الحساب");
+  const from=select("الحساب الذي خُصم منه المبلغ فعليًا","from",getAccounts(),"","اختر الحساب البنكي");
   const to=select("الحساب الذي استلم المبلغ","to",getAccounts(),"","اختر الحساب");
   if(kind==="transfer")inner+=from+to;
-  else if(["expense","repayment"].includes(kind))inner+=from;
+  else if(kind==="expense")inner+=from;
+  else if(kind==="repayment")inner+=from+select("هل سُجل خصم البنك سابقًا؟","bankAlreadyPosted",[["no","لا — الخصم جديد من الحساب المختار"],["yes","نعم — حدث أصل الدين فقط دون خصم البنك مرة أخرى"]],"no");
   else if(["income","profit"].includes(kind))inner+=to;
-  if(kind==="charge"||kind==="repayment")inner+=select("الدين / الفيزا","debtId",allDebts(),"","اختر الدين");
-  if(kind==="repayment")inner+=field("المبلغ الذي نقص فعلًا من أصل الدين","principal","0","number")+'<p class="hint">اكتب قيمة انخفاض أصل الدين من كشف البنك. قد يختلف عن القسط بسبب الفوائد.</p>';
-  if(kind==="expense"||kind==="charge"||kind==="income")inner+=field("البند / التصنيف","category",kind==="income"?"دخل إضافي":"مصروف","text","required");
+  else if(kind==="cash_advance")inner+=to+'<p class="hint">لا يُخصم هذا السحب من حساب الراتب. يزيد دين الفيزا، ويمكنك تحديد حساب استقبال النقد إن أودعته في بنك أو محفظة نقدية. اتركه بلا حساب إذا كان النقد خارج حسابات البرنامج.</p>';
+  if(["charge","repayment","cash_advance","refund"].includes(kind))inner+=select("بطاقة الفيزا / القرض المتأثر","debtId",kind==="repayment"?allDebts():data.debts.filter(d=>d.kind==="credit").map(d=>[d.id,d.name+" • "+money(debtsBalance(d))]),"","اختر الفيزا");
+  if(kind==="repayment")inner+=field("المبلغ الذي انخفض به أصل الدين","principal","","number")+'<p class="hint">فيزا: كامل مبلغ السداد غالبًا. القرض: أدخل الجزء الذي نقص فعليًا من أصل القرض بعد الفوائد.</p>';
+  if(["expense","charge","income","cash_advance","refund"].includes(kind))inner+=field("البند / التصنيف","category",kind==="charge"?"مشتريات فيزا":kind==="cash_advance"?"سحب نقدي من الفيزا":kind==="refund"?"استرداد فيزا":kind==="income"?"دخل إضافي":"مصروف","text","required");
   if(kind==="profit")inner+=field("اسم المحفظة","category","أرباح دراهم");
   if(kind==="expense"){
     const choices=dueItems().filter(x=>x.rest>0).map(x=>[x.key,x.name+" — "+x.date+" • المتبقي "+money(x.rest)]);
     inner+=select("ربط الدفع باستحقاق (اختياري)","commitmentKey",choices,"","مصروف عادي بدون استحقاق");
   }
   if(["income","expense"].includes(kind))inner+=select("مشروع مرتبط (اختياري)","projectId",projectOptions(),"","دون مشروع");
-  inner+=field("ملاحظة","note");
+  inner+=field("ملاحظة","note")+
+    (editingId?'<p class="ledger-warning">تعديل هذه الحركة سيصحح تأثيرها على الأرصدة والديون تلقائيًا. لا تغير الرصيد الافتتاحي لتعويض خطأ في تصنيف الحركة.</p>':"");
+
  }
  $("modalTitle").textContent=editingId?"تعديل: "+title:title;
  $("editorForm").innerHTML='<div class="form-grid">'+inner+'</div><div class="modal-footer"><button type="button" class="button outline" data-action="close">إلغاء</button><button class="button primary" type="submit">حفظ</button></div>';
@@ -543,6 +547,8 @@ function editor(kind,id){
   if(source)$("editorForm").querySelectorAll("[name]").forEach(el=>{if(el.name==="cardsText")el.value=(source.cards||[]).join(", ");else if(el.name==="bankAccountId"&&kind==="budget")el.value=linkedAccount(source)?.id||"";
    else if(el.name==="forecastEnabled"&&kind==="project")el.value=String(!!source.forecastEnabled);
    else if(el.name==="profitInBudget"&&kind==="project")el.value=String(!!source.profitInBudget);
+   else if(el.name==="kind"&&["expense","income","transfer","charge","cash_advance","refund","repayment","profit"].includes(kind))el.value=kind;
+   else if(el.name==="bankAlreadyPosted"&&kind==="repayment")el.value=source.bankAlreadyPosted?"yes":"no";
    else if(el.name==="useObligations"&&kind==="commitment")el.value=String(source.obligationFundingExplicit?!!source.useObligations:/مدرس|تعليم|جامع|رسوم|سيار|صيان|مركب|فحص|تأمين|مركبة/i.test(source.name||"")||source.useObligations===true)==="true"?"yes":"no";
    else if(source[el.name]!=null)el.value=source[el.name]});
  }
@@ -552,6 +558,28 @@ function storeRecord(name,record){
  const arr=data[name],i=arr.findIndex(x=>x.id===editingId);
  if(editingId&&i>=0)arr[i]={...arr[i],...record,id:editingId};
  else arr.push(record);
+}
+function validateFinancialMove(m,previous){
+ const amount=Number(m.amount),skip=previous?.id;
+ const viable=["expense","income","transfer","charge","cash_advance","refund","repayment","profit"];
+ if(!viable.includes(m.kind)||!(amount>0)||!Number.isFinite(amount)||!/^20\d{2}-\d{2}-\d{2}$/.test(m.date))throw Error("نوع الحركة أو المبلغ أو التاريخ غير صحيح");
+ if(["expense","transfer"].includes(m.kind)&&!acc(m.from))throw Error("الحساب المسحوب منه غير معروف");
+ if(["income","profit","transfer"].includes(m.kind)&&!acc(m.to))throw Error("اختر الحساب المستلم");
+ if(m.kind==="cash_advance"&&m.to&&!acc(m.to))throw Error("حساب استلام النقد غير معروف");
+ if(m.kind==="transfer"&&m.from===m.to)throw Error("التحويل يجب أن يكون بين حسابين مختلفين");
+ if(["charge","cash_advance","refund"].includes(m.kind)&&debt(m.debtId)?.kind!=="credit")throw Error("اختر بطاقة الفيزا؛ هذه ليست عملية من الحساب البنكي");
+ if(m.kind==="repayment"&&(!debt(m.debtId)||(!m.bankAlreadyPosted&&!acc(m.from))))throw Error("حدد بطاقة الدين وحساب السداد أو أن الخصم سبق تسجيله");
+ if(m.kind==="repayment"&&(!Number.isFinite(m.principal)||m.principal<0||m.principal>amount))throw Error("المبلغ المخصوم من أصل الدين يجب أن يكون بين صفر ومبلغ السداد");
+ if(["refund","repayment"].includes(m.kind)){
+   const d=debt(m.debtId),balance=Math.max(0,num(d.opening)+data.moves.reduce((sum,x)=>x.id===skip||x.posted===false||x.debtId!==d.id?sum:sum+debtMovement(x),0));
+   if((m.kind==="refund"?amount:m.principal)>balance+.005&&!confirm("المبلغ أكبر من دين البطاقة المسجل؛ ربما يوجد رصيد دائن أو بيانات ناقصة. هل تؤكد؟"))throw Error("لم تُعتمد عملية تزيد سداد الدين على رصيده");
+ }
+ const bankOut=["expense","transfer"].includes(m.kind)||m.kind==="repayment"&&!m.bankAlreadyPosted;
+ if(bankOut){
+   const a=acc(m.from);
+   const baseline=Number(a.opening||0)+data.moves.reduce((sum,x)=>x.id===skip||x.posted===false?sum:sum+(x.to===a.id?num(x.amount):0)-(x.from===a.id&&!x.bankAlreadyPosted?num(x.amount):0),0);
+   if(baseline+.005<amount&&!confirm("سيسبب هذا الخصم رصيدًا بنكيًا سالبًا. تأكد أن الخصم من البنك فعلًا وليس من الفيزا. متابعة؟"))throw Error("أُلغي الخصم لحماية الحساب من تصنيف خاطئ");
+ }
 }
 function saveForm(form){
  const v=Object.fromEntries(new FormData(form).entries()),kind=modalType;
@@ -593,22 +621,33 @@ function saveForm(form){
   storeRecord("projects",{id:uid(),name,description:v.description||"",expectedNetProfit:net,profitStart:v.profitStart||"",profitInterval:interval,profitCount:count,profitToObligations:alloc,profitInBudget:v.profitInBudget==="true",forecastEnabled:v.forecastEnabled==="true"});
 }
  else{
-  const m={id:uid(),date:v.date||now(),kind:v.kind,amount:Number(v.amount),from:v.from||"",to:v.to||"",debtId:v.debtId||"",category:(v.category||"").trim(),note:v.note||"",commitmentKey:v.commitmentKey||"",projectId:v.projectId||"",principal:num(v.principal),posted:true};
-  if(!(m.amount>0)&&Number.isFinite(m.amount))throw Error("المبلغ يجب أن يكون أكبر من صفر");
-  if(!(Number.isFinite(m.amount)&&m.amount>0))throw Error("أدخل مبلغًا صحيحًا");
-  if(["expense","transfer","repayment"].includes(m.kind)&&!acc(m.from))throw Error("اختر الحساب الذي دفع");
-  if(["income","profit","transfer"].includes(m.kind)&&!acc(m.to))throw Error("اختر الحساب الذي استلم");
-  if(m.kind==="transfer"&&m.from===m.to)throw Error("اختر حسابين مختلفين");
-  if(["charge","repayment"].includes(m.kind)&&!debt(m.debtId))throw Error("اختر الدين");
-  if(m.kind==="charge"&&debt(m.debtId).kind!=="credit")throw Error("المشتريات الائتمانية تُسجل على بطاقة فيزا فقط");
+  const prior=editingId?data.moves.find(x=>x.id===editingId):null;
+  if(editingId&&!prior)throw Error("لم أجد الحركة للتصحيح");
+  if(prior?.importedHistory)throw Error("حركة تاريخية مدمجة في الرصيد المستورد؛ لا يمكن تعديلها من هذه الشاشة");
+  const amount=Number(v.amount),kind=v.kind,paidElsewhere=kind==="repayment"&&v.bankAlreadyPosted==="yes";
+  const debtId=["charge","cash_advance","refund","repayment"].includes(kind)?v.debtId||"":"";
+  const principal=kind==="repayment"?(v.principal===""&&debt(debtId)?.kind==="credit"?amount:Number(v.principal||0)):0;
+  const m={id:prior?.id||uid(),date:v.date||now(),kind,amount,
+    from:(["expense","transfer"].includes(kind)||kind==="repayment"&&!paidElsewhere)?v.from||"":"",
+    to:["transfer","income","profit","cash_advance"].includes(kind)?v.to||"":"",
+    debtId,category:(v.category||"").trim(),note:v.note||"",commitmentKey:kind==="expense"?v.commitmentKey||"":"",
+    projectId:["income","expense"].includes(kind)?v.projectId||"":"",
+    principal,bankAlreadyPosted:paidElsewhere,posted:true};
+  validateFinancialMove(m,prior);
   if(m.kind==="expense"&&m.commitmentKey){
     const due=dueItems().find(x=>x.key===m.commitmentKey);
     if(!due)throw Error("الاستحقاق المحدد لم يعد موجودًا");
-    if(m.amount>due.rest+0.005&&!confirm("المبلغ أكبر من المتبقي لهذا الاستحقاق. هل تريد تسجيله؟"))return;
+    if(m.amount>due.rest+(prior?.commitmentKey===m.commitmentKey?num(prior.amount):0)+.005&&!confirm("المبلغ أكبر من المتبقي لهذا الاستحقاق؛ هل تؤكد؟"))return;
   }
-  if(m.kind==="repayment"&&m.principal>m.amount)throw Error("المخفض من أصل الدين لا يمكن أن يتجاوز قيمة السداد");
-  if(["expense","transfer","repayment"].includes(m.kind)&&accountBalance(acc(m.from))+0.005<m.amount&&!confirm("الرصيد المسجل أقل من قيمة الحركة. هل تريد تسجيلها على أي حال؟"))return;
-  storeRecord("moves",m);period=m.date.slice(0,7);
+  if(m.kind==="cash_advance"&&!m.to&&!confirm("يزيد السحب النقدي دين الفيزا؛ لم تحدد مكان إيداع النقد المستلم. هل تريد المتابعة؟"))return;
+  const old=prior?JSON.parse(JSON.stringify(prior)):null;
+  storeRecord("moves",m);
+  if(old){
+    if(!Array.isArray(data.correctionHistory))data.correctionHistory=[];
+    data.correctionHistory.push({at:new Date().toISOString(),id:m.id,before:old,after:JSON.parse(JSON.stringify(data.moves.find(x=>x.id===m.id))),action:"edit"});
+  }
+  period=m.date.slice(0,7);
+
  }
  closeModal();keep();
 }
