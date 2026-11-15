@@ -62,16 +62,17 @@ function parse(raw,data){
  if(!d&&visaNamed)d=cardDebt(debts,"",visaNamed==="١"?"1":visaNamed==="٢"?"2":visaNamed);
  const hasCredit=/فيزا|visa|بطاقة\s*(?:ائتمانية|إئتمانية|الائتمان|ائتمان)|credit\s*card|سداد\s*بطاقة|بطاقة\s*الائتمان/i.test(t);
  const cardContext=hasCredit||!!d;
- const rejected=/مرفوض|لم\s*تكتمل|الرصيد\s*غير\s*كافي|عملية\s*ملغاة|لم\s*تنفذ|فشلت\s*العملية/i.test(t);
+ const rejected=/مرفوض|لم\s*تكتمل|الرصيد\s*غير\s*كافي|عملية\s*ملغاة|(?:تم\s*)?إلغاء\s*عملية|(?:تم\s*)?الغاء\s*عملية|لم\s*تنفذ|فشلت\s*العملية/i.test(t);
  const refund=/استرداد|إرجاع|ارجاع|رد\s*مبلغ|refund|reversal|عملية\s*معكوسة/i.test(t);
  const isPayment=/سداد\s*(?:البطاقة|بطاقة|فيزا|الفيزا)|تسديد\s*(?:بطاقة|فيزا)|دفعة\s*(?:بطاقة|ائتمانية)|قيد\s*دائن\s*(?:للبطاقة|للفيزا)/i.test(t)||
   (/(?:تحويل|حوالة|خصم|سداد)/i.test(t)&&/(?:إلى|الى|لـ|لصالح)\s*(?:بطاقة|فيزا)/i.test(t));
- const withdrawal=/سحب\s*نقدي|cash\s*advance|سحب\s*(?:من|بواسطة)\s*(?:فيزا|بطاقة\s*ائتمان)|تحويل\s*من\s*(?:فيزا|بطاقة\s*ائتمان)\s*(?:إلى|الى)\s*حساب/i.test(t);
+ const withdrawal=/سحب\s*نقدي|cash\s*advance|سحب\s*(?:من|بواسطة)\s*(?:فيزا|بطاقة\s*(?:فيزا|ائتمان))|تحويل\s*من\s*(?:فيزا|بطاقة\s*(?:فيزا|ائتمان))\s*(?:إلى|الى)\s*حساب/i.test(t);
  const isPurchase=/شراء|POS|mada|مدى|apple\s*pay|samsungpay|دفع\s*بالفيزا|خصم\s*من\s*البطاقة/i.test(t);
  const transfer=/تحويل\s*بين\s*حساباتك|تحويل\s*بين\s*الحسابات|حوالة\s*صادرة\s*داخلية|تحويل\s*داخلي/i.test(t);
  const incoming=/حوالة\s*واردة|إيداع|تم\s*استلام|استلام\s*حوالة|إضافة\s*رصيد/i.test(t);
  const outgoing=/حوالة\s*صادرة|تحويل\s*صادر/i.test(t);
  const bill=/سداد\s*فاتورة|مدفوعات\s*وزارة\s*الداخلية/i.test(t);
+ const loanRepayment=/سداد\s*(?:قرض|تمويل|قسط\s*قرض)|خصم\s*قسط\s*(?:قرض|تمويل)|تسديد\s*(?:قرض|تمويل)|دفعة\s*(?:قرض|تمويل)/i.test(t);
  const profit=/أرباح\s*دراهم|توزيع\s*أرباح|ربح\s*محفظة/i.test(t);
  let kind="unclassified";
  const rule=(data?.learnedRules||[]).find(r=>r.key&&t.toLowerCase().includes(String(r.key).toLowerCase()));
@@ -80,6 +81,7 @@ function parse(raw,data){
  else if(cardContext&&isPayment)kind="repayment";
  else if(cardContext&&withdrawal)kind="cash_advance";
  else if(cardContext&&(isPurchase||hasCredit))kind="charge";
+ else if(!cardContext&&loanRepayment)kind="repayment";
  else if(profit&&incoming)kind="profit";
  else if(transfer)kind="transfer";
  else if(incoming)kind="income";
@@ -122,7 +124,7 @@ function parse(raw,data){
  merchant=merchant.trim().slice(0,70);
  const category=kind==="charge"?"مشتريات فيزا":kind==="cash_advance"?"سحب نقدي من الفيزا":kind==="refund"?"استرداد فيزا":kind==="expense"?(outgoing?"حوالة صادرة":merchant||"مشتريات بنكية"):kind==="repayment"?"سداد فيزا":kind==="income"?"حوالة واردة":kind==="profit"?"أرباح دراهم":kind==="transfer"?"تحويل بين الحسابات":"غير مصنف";
  const isCard=["charge","cash_advance","refund","repayment"].includes(kind);
- return{raw:String(raw||""),normalized:t,hash:hash(t),learnedRule:rule?.key||"",date:parseDate(raw),kind,amount:a,from,to,debtId:d?.id||"",cardDigits:ids,accountDigits:[debitId,creditId].filter(Boolean),category,principal:0,confidence:kind!=="unclassified"&&!!a?isCard?!!d:true:false,reason:rejected?"العملية مرفوضة؛ لا تُخصم من الأرصدة":!a?"لم أستطع تحديد المبلغ، فلا تسجلها قبل المراجعة":isCard&&!d?"الرسالة تخص بطاقة ائتمانية؛ حدد الفيزا الصحيحة من قائمة الفيزا. لا تختَر حساب الراتب للشراء.":kind==="unclassified"?"تعذر تحديد نوع العملية. اختر نوعها صراحة قبل الحفظ":kind==="cash_advance"?"سحب من رصيد الفيزا يزيد الدين؛ حدد وجهة النقد إن أودعته في حساب":kind==="transfer"&&(!from||!to)?"اختر طرفي التحويل قبل التسجيل":kind==="repayment"&&!from?"حدّد هل خصم السداد البنكي مسجل مسبقًا":"راجع النوع والمبلغ والجهات قبل التسجيل"};
+ return{raw:String(raw||""),normalized:t,hash:hash(t),learnedRule:rule?.key||"",date:parseDate(raw),kind,amount:a,from,to,debtId:d?.id||"",cardDigits:ids,accountDigits:[debitId,creditId].filter(Boolean),category,principal:0,confidence:kind!=="unclassified"&&!!a?isCard?!!d:true:false,reason:rejected?"العملية مرفوضة؛ لا تُخصم من الأرصدة":!a?"لم أستطع تحديد المبلغ، فلا تسجلها قبل المراجعة":isCard&&!d?"الرسالة تخص بطاقة ائتمانية؛ حدد الفيزا الصحيحة من قائمة الفيزا. لا تختَر حساب الراتب للشراء.":kind==="unclassified"?"تعذر تحديد نوع العملية. اختر نوعها صراحة قبل الحفظ":kind==="cash_advance"?"سحب من رصيد الفيزا يزيد الدين؛ حدد وجهة النقد إن أودعته في حساب":kind==="transfer"&&(!from||!to)?"اختر طرفي التحويل قبل التسجيل":kind==="repayment"&&!d?"حدد القرض أو الفيزا الصحيح ومقدار أصل الدين الذي انخفض":kind==="repayment"&&!from?"حدّد هل خصم السداد البنكي مسجل مسبقًا":"راجع النوع والمبلغ والجهات قبل التسجيل"};
 }
 
 root.BankSMS={parse,normalize:tidy,hash,amount,cards};
