@@ -44,7 +44,7 @@ const banks=()=>data.accounts.filter(x=>["bank","reserve","cash"].includes(x.rol
 const movements=(m=period)=>data.moves.filter(x=>x.date.slice(0,7)===m);
 const total=(a,selector)=>a.reduce((sum,x)=>sum+(selector?selector(x):num(x.amount)),0);
 const incomeM=(m=period)=>total(movements(m).filter(x=>x.kind==="income"||x.kind==="profit"));
-const expenseM=(m=period)=>total(movements(m).filter(x=>x.kind==="expense"||x.kind==="charge"))-total(movements(m).filter(x=>x.kind==="refund"));
+const expenseM=(m=period)=>total(movements(m).filter(x=>x.kind==="expense"||x.kind==="charge"))-total(movements(m).filter(x=>x.kind==="refund"))+total(movements(m).filter(x=>x.kind==="repayment"),x=>Math.max(0,num(x.amount)-num(x.principal)));
 const paidM=(m=period)=>total(movements(m).filter(x=>x.kind==="repayment"));
 const netCash=()=>total(banks(),accountBalance);
 const reserveCash=()=>total(reserves(),accountBalance);
@@ -151,6 +151,7 @@ function saveSMS(){
  const raw=smsDraft.raw,oldHash=window.FinanceImport.hash(window.FinanceImport.normalize(raw));
  if(data.seenHashes[oldHash]||data.seenHashes[smsDraft.hash]||data.moves.some(m=>m.raw&&window.FinanceImport.normalize(m.raw)===window.FinanceImport.normalize(raw)))throw Error("هذه الرسالة مسجلة سابقًا؛ تم منع التكرار");
  if(smsDraft.kind==="unclassified"&&!confirm("صيغة الرسالة لم تُعرف. هل راجعت نوع الحركة والفيزا والحساب يدويًا؟"))return;
+ if(["charge","cash_advance","refund"].includes(smsDraft.kind)&&["expense","transfer"].includes(kind)&&!confirm("تحذير: تحليل الرسالة يرجّح أنها عملية فيزا وليست خصمًا من الحساب البنكي. هل تأكدت من كشف الحساب أن المبلغ خرج من البنك؟"))return;
  const bankOut=["expense","transfer"].includes(kind)||kind==="repayment"&&!paidElsewhere;
  if(bankOut&&acc(from)&&accountBalance(acc(from))+.005<sum&&!confirm("الرصيد المسجل أقل من قيمة هذه الحركة البنكية. هل تريد المتابعة؟"))return;
  if(kind==="cash_advance"&&!to&&!confirm("السحب النقدي من الفيزا سيزيد دين البطاقة، لكن النقد المستلم لن يدخل أي حساب مسجل. هل تريد المتابعة؟"))return;
@@ -230,7 +231,7 @@ function isAccountConfirmed(a){
 function bankGroups(){const names=[...new Set(data.accounts.map(bankGroup))];return names.map(name=>({name,children:data.accounts.filter(x=>bankGroup(x)===name)}))}
 function contentAccountFunding(){
  const groups=bankGroups();
- if(!groups.length)return panel("تأكيد التحويلات",blank("استورد الحسابات أو أضفها أولًا"));
+ if(!groups.length)return panel("متابعة مخصصات الميزانية",blank("استورد الحسابات أو أضفها أولًا"));
  if(!bankPick||!groups.some(g=>g.name===bankPick))bankPick=groups[0].name;
  const group=groups.find(g=>g.name===bankPick);
  if(!accountPick||!group.children.some(a=>a.id===accountPick))accountPick=group.children[0]?.id||"";
@@ -253,7 +254,7 @@ function contentAccountFunding(){
  const bankBanner='<div class="bank-banner '+(allDone?"confirmed":"pending")+'"><b>'+esc(bankPick)+'</b><span>'+(allDone?"✓ جميع الحسابات مؤكدة لهذا الشهر":"بانتظار تأكيد "+(fundingChildren.length-marked)+" حساب")+'</span><strong>'+marked+" / "+fundingChildren.length+" حساب • المطلوب تحويله "+money(groupTotal)+" • المؤكد "+money(confirmedTotal)+'</strong></div>';
  const acct='<div class="funding-account '+(account&&isAccountConfirmed(account)?"confirmed":"pending")+'">'+
  (account?'<b>'+esc(account.name)+'</b><small>'+esc(account.bank)+" •••• "+esc(account.last4||"—")+'</small><strong>'+money(accountBalance(account))+'</strong>'+
- '<span class="fund-state">'+(fundedItems(account).length===0?"لا توجد بنود مخصصة لهذا الحساب":isAccountConfirmed(account)?"✓ تم تأكيد تحويل المخصص":"لم يؤكد تحويل المخصص بعد")+'</span>'+
+ '<span class="fund-state">'+(fundedItems(account).length===0?"لا توجد بنود مخصصة لهذا الحساب":isAccountConfirmed(account)?"✓ تم تأكيد تنفيذ البند في الميزانية":"لم يتم تأكيد البند في الميزانية")+'</span>'+
  '<div class="hint">المطلوب تحويله لهذا الحساب: <b>'+money(fundedAmount(account))+'</b></div>'+
  '<div class="compact-list">'+fundedItems(account).map(x=>'<div class="list-row"><div><b>'+esc(x.name)+'</b><small>'+ (x.paid?"✓ تم تنفيذ البند":"○ لم يؤكد تنفيذ البند")+'</small></div><b>'+money(x.amount)+'</b></div>').join("")+'</div>'+
   (fundedItems(account).length?button(isAccountConfirmed(account)?"إلغاء تأكيد هذا الحساب":"تأكيد تحويل هذا الحساب","toggleAccountFunding",account.id,isAccountConfirmed(account)?"outline":"primary"):"")+button("تعديل الحساب الفرعي","editAccount",account.id,"outline")+button("مراجعة الحركات المؤثرة في الرصيد","reviewAccount",account.id,"primary"):"")+'</div>';
@@ -517,7 +518,7 @@ function bars(entries,hint){
 }
 function categoryTotals(period){
  const agg={};
- movements(period).filter(x=>x.kind==="expense"||x.kind==="charge").forEach(x=>{let k=x.category||"غير مصنف";agg[k]=(agg[k]||0)+num(x.amount)});
+ movements(period).filter(x=>["expense","charge","refund"].includes(x.kind)).forEach(x=>{let k=x.category||"غير مصنف";agg[k]=(agg[k]||0)+(x.kind==="refund"?-num(x.amount):num(x.amount))});
  return Object.entries(agg).sort((a,b)=>b[1]-a[1]);
 }
 function contentChart(){
@@ -561,7 +562,7 @@ function select(label,name,items,selected,empty){return '<label class="form-fiel
 function editor(kind,id){
  modalType=kind;editingId=id||"";
  let title="",inner="",date=field("تاريخ العملية","date",now(),"date"),amount=field("المبلغ بالريال","amount","","number",'required');
- if(kind==="account"){title="إضافة حساب حقيقي";inner=field("اسم الحساب","name","","text","required")+field("اسم البنك أو الجهة","bank")+field("آخر أربعة أرقام (اختياري)","last4")+field("بطاقات مدى المرتبطة (آخر ٤ أرقام، افصل بفاصلة)","cardsText")+field("الرصيد الافتتاحي قبل الحركات","opening","0","number","required")+select("نوع الحساب","role",[["bank","حساب بنكي"],["reserve","حساب الالتزامات (ادخار)"],["investment","محفظة استثمارية"],["cash","نقد في اليد / محفظة نقدية"]],"bank");}
+ if(kind==="account"){title=editingId?"تعديل بيانات حساب موجود":"إضافة حساب حقيقي";inner=field("اسم الحساب","name","","text","required")+field("اسم البنك أو الجهة","bank")+field("آخر أربعة أرقام (اختياري)","last4")+field("بطاقات مدى المرتبطة (آخر ٤ أرقام، افصل بفاصلة)","cardsText")+field("الرصيد الافتتاحي قبل الحركات","opening","0","number","required")+select("نوع الحساب","role",[["bank","حساب بنكي"],["reserve","حساب الالتزامات (ادخار)"],["investment","محفظة استثمارية"],["cash","نقد في اليد / محفظة نقدية"]],"bank");}
  else if(kind==="budgetSalary"){title="تعديل الراتب المخطط لشهر "+period;inner=field("الشهر","month",period,"month","readonly")+field("الراتب المخطط","salary",incomePlanForMonth(period).salary,"number","required");}
  else if(kind==="budgetIncome"){title=editingId?"تعديل دخل إضافي":"إضافة دخل آخر";inner=field("الشهر","month",period,"month","readonly")+field("مصدر الدخل (مثال: أرباح دراهم)","name","","text","required")+field("المبلغ المتوقع لهذا الشهر","amount","","number","required");}
  else if(kind==="budget"){title="إضافة بند ميزانية";inner=field("الشهر","month",period,"month","required")+field("اسم البند","name","","text","required")+field("المخصص للشهر","amount","","number","required")+select("نوع التخصيص","type",[["expense","مصروف مخطط"],["debt","قسط دين مخطط"],["saving","تحويل ادخار للالتزامات"],["investment","استثمار مخطط"]],"expense")+select("البنك / الحساب المخصص لتنفيذ هذا البند","bankAccountId",data.accounts.filter(a=>a.role==="bank"||a.role==="reserve"||a.role==="investment").map(a=>[a.id,bankGroup(a)+" — "+a.name]),"","غير محدد (يرجى الاختيار)");}
@@ -731,7 +732,7 @@ function removeRecord(type,id){
   const hs=new Set(row.smsHashes||[]);
   if(row.source==="sms-paste"&&row.raw&&window.FinanceImport&&window.BankSMS){
    hs.add(window.FinanceImport.hash(window.FinanceImport.normalize(row.raw)));
-   hs.add(window.BankSMS.hash(window.BankSMS.normalize(row.raw).replace(/[–—]/g,"-").replace(/\s+/g," ")));
+   hs.add(window.BankSMS.parse(row.raw,data).hash);
   }
   for(const h of hs)if(!data.moves.some(x=>x.id!==id&&(x.smsHashes||[]).includes(h)))delete data.seenHashes[h];
  }
