@@ -27,7 +27,7 @@ obligations:[["reserve","حساب الادخار"],["due","الاستحقاقا�
 debts:[["balances","أرصدة الديون"],["payments","السداد المثبت"],["history","سجلات الفيزا المستوردة"]],
 investments:[["darahim","محفظة دراهم"],["profits","الأرباح الفعلية"],["legacy","أرباح دراهم في الميزانيات"]],
 projects:[["list","المشاريع"],["forecasts","الأرباح المتوقعة"],["activity","حركات المشاريع"]],
-salary:[["calculator","حاسبة الراتب المسجلة"],["monthly","الرواتب في الميزانيات"]],
+salary:[["countdown","عداد نزول الراتب"],["calculator","حاسبة الراتب المسجلة"],["monthly","الرواتب في الميزانيات"]],
 forecast:[["charts","الرسوم البيانية"],["allocations","التوزيع الشهري"],["draws","سحوبات دراهم"],["method","طريقة الحساب"]],
 charts:[["expenses","المصروف حسب البند"],["spending","المصروف الكامل"],["accounts","أرصدة الحسابات"],["projects","المشاريع"],["obligations","الالتزامات"],["debts","الديون"],["darahim","دراهم"],["monthly","حركة ١٢ شهرًا"]],
 data:[["backup","النسخ والاستيراد"],["inspect","ملخص بيانات الاستيراد"],["about","طريقة الحساب"]]
@@ -75,7 +75,7 @@ function contentHome(){
  const metrics=stats([box("النقد في الحسابات",netCash(),"يشمل حساب الالتزامات","blue"),box("المخصص للالتزامات",reserveCash(),"ضمن النقد أعلاه، لا يُضاف مرة ثانية","violet"),box("مصروف الشهر الفعلي",expenseM(),"مشتريات ومصاريف مثبتة فقط","coral"),box("مجموع الديون المثبتة",sumDebt(),"بحسب آخر أرصدة مدخلة وحركاتها","amber")]);
  if(sub==="recent")return panel("آخر الحركات المسجلة",entryList(latest.map(m=>({title:moveName(m),subtitle:m.date+" • "+esc(m.category||"")+ " • "+moveAccounts(m),value:money(m.amount),negative:m.kind==="expense"||m.kind==="charge"})),"لم تُسجّل حركات فعلية بعد"),button("تسجيل حركة","newMove",null,"primary"));
  const start=(!data.accounts.length&&!data.moves.length)?panel("البدء في المركز الجديد",'<p class="body-note">الموقع جديد وخالٍ من المدخلات القديمة. يمكنك استيراد ملف «المستقبل المالي» للمواعيد والأقساط، أو إحضار الأرصدة السابقة من نفس الجهاز. لا يتحول الموعد إلى مصروف إلا إذا سجلت عملية دفع.</p><div class="buttons">'+button("فتح الاستيراد","goData",null,"primary")+button("إضافة أول حساب","newAccount",null,"outline")+'</div>'):"";
- return metrics+start+panel("ماذا يعرض هذا المركز؟",'<div class="intro-grid"><div><span class="round-icon">✓</span><b>حقيقي ومسجل</b><p>الأرصدة والحركات والأرباح التي أدخلتها بالفعل. لا نمو افتراضي ولا حساب لعجز مستقبلي.</p></div><div><span class="round-icon">≠</span><b>ادخار ليس مصروفًا</b><p>التحويل إلى حساب الالتزامات يبقى ضمن ثروتك، ويُحسب المصروف فقط عندما تسدد فاتورة حقيقية.</p></div><div><span class="round-icon">◷</span><b>موعد غير مدفوع</b><p>رسوم الدراسة والسيارة مواعيد مخططة، وليست دفعات حقيقية إلى أن تُسجّل عملية السداد.</p></div></div>')+
+ return (window.SalaryCountdown?.widget(data.salaryCountdown,{compact:true})||"")+metrics+start+panel("ماذا يعرض هذا المركز؟",'<div class="intro-grid"><div><span class="round-icon">✓</span><b>حقيقي ومسجل</b><p>الأرصدة والحركات والأرباح التي أدخلتها بالفعل. لا نمو افتراضي ولا حساب لعجز مستقبلي.</p></div><div><span class="round-icon">≠</span><b>ادخار ليس مصروفًا</b><p>التحويل إلى حساب الالتزامات يبقى ضمن ثروتك، ويُحسب المصروف فقط عندما تسدد فاتورة حقيقية.</p></div><div><span class="round-icon">◷</span><b>موعد غير مدفوع</b><p>رسوم الدراسة والسيارة مواعيد مخططة، وليست دفعات حقيقية إلى أن تُسجّل عملية السداد.</p></div></div>')+
  panel("ملخص هذا الشهر",entryList([{title:"دخل مثبت",value:money(incomeM())},{title:"مصاريف ومشتريات مثبتة",value:money(expenseM())},{title:"سداد ديون مثبت",value:money(paidM())},{title:"تحويل إلى حساب الادخار",value:money(total(movements().filter(m=>m.kind==="transfer"&&acc(m.to)?.role==="reserve")))}]));
 }
 function smsBankOptions(selected){
@@ -534,6 +534,7 @@ function contentInvestment(){
  return stats([box("المحفظة المسجلة",total(accounts,accountBalance),"قيمة مسجلة في آخر رصيد + الحركات","amber"),box("الأرباح المستلمة",total(profits),"مسجلة كدخل فعلي، وليست نموًا مفترضًا","violet")])+panel("الحسابات الاستثمارية",entryList(accounts.map(a=>({title:a.name,subtitle:"الأصل المسجل والحركات المرتبطة",value:money(accountBalance(a)),actions:actions("Account",a.id)})),"لا يوجد حساب استثماري حقيقي بعد"),button("إضافة محفظة","newInvestmentAccount",null,"primary"))+'<p class="body-note">لم نعد نحسب عائدًا افتراضيًا بنسبة ٦٪ أو تراكمًا لسنوات. الأرباح هنا لا تظهر إلا عندما تسجلها مستلمة أو داخلة إلى المحفظة فعليًا.</p>';
 }
 function contentSalary(){
+ if(sub==="countdown")return window.SalaryCountdown?.settings(data.salaryCountdown)||panel("عداد الراتب",blank("تعذر تحميل عداد الراتب"));
  const s=data.legacy?.salaryCalc||{},months=data.legacy?.budgetMonths||{};
  if(sub==="monthly")return panel("الرواتب المسجلة في الميزانيات",entryList(Object.entries(months).sort((a,b)=>b[0].localeCompare(a[0])).map(([m,v])=>({title:"راتب شهر "+m,subtitle:"من ملف الميزانية الشامل؛ ليس إثبات حركة إيداع بنكي",value:money(v.salary)})),"لم تُستورد بيانات راتب شهرية"));
  const keys=[["base","الراتب الأساسي"],["housing","بدل السكن"],["transport","بدل النقل"],["other","بدلات أخرى"],["deductions","الاستقطاعات"],["bankDeductions","استقطاعات القروض البنكية"]];
@@ -614,6 +615,7 @@ function render(){
  let html=page==="home"?contentHome():page==="accounts"?contentAccounts():page==="budget"?contentBudget():page==="moves"?contentMoves():page==="obligations"?contentObligations():page==="debts"?contentDebts():page==="investments"?contentInvestment():page==="projects"?contentProjects():page==="salary"?contentSalary():page==="forecast"?(window.RetirementApp?.render(data,sub)||blank("وحدة التقاعد غير متاحة")):page==="charts"?contentChart():contentData();
  $("content").innerHTML=html;
  updateSmsVisibility();
+ window.SalaryCountdown?.refresh(document,data.salaryCountdown);
  $("storageStatus").textContent=data.moves.length+" حركة مسجلة • "+data.accounts.length+" حساب"+(data.legacy?.bankHistoryCount?" • "+data.legacy.bankHistoryCount+" تاريخية":"");
 }
 function field(label,name,value,type,extras){return '<label class="form-field"><span>'+esc(label)+'</span><input name="'+esc(name)+'" type="'+(type||"text")+'" '+(type==="number"?'min="0" step="any" inputmode="decimal"':"")+' value="'+esc(value==null?"":value)+'" '+(extras||"")+'></label>'}
@@ -909,6 +911,20 @@ $("content").addEventListener("click",e=>{
  const target=e.target.closest("[data-action]");if(!target)return;
  const action=target.dataset.action;
  const m={newAccount:"account",newBudget:"budget",newCommitment:"commitment",newDebt:"debt",newProject:"project",newInvestmentAccount:"account",newMove:"expense",newExpense:"expense",newTransfer:"transfer",newProfit:"profit"};
+ if(action==="openSalaryCountdown"){page="salary";sub="countdown";render();return;}
+ if(action==="saveSalaryCountdown"){
+  try{
+   if(!window.SalaryCountdown)throw Error("عداد الراتب غير محمل");
+   const settings=window.SalaryCountdown.validate($("salaryPayDay")?.value,$("salaryPayTime")?.value,$("salaryWeekendRule")?.value);
+   data.salaryCountdown=settings;keep();
+  }catch(err){alert("تعذر حفظ موعد الراتب: "+err.message)}
+  return;
+ }
+ if(action==="resetSalaryCountdown"){
+  if(!window.SalaryCountdown)return;
+  if(!confirm("استعادة اليوم ٢٧ الساعة ٠٨:٠٠ صباحًا للصرف المتوقع؟ لن تتغير أي حركة مالية."))return;
+  data.salaryCountdown=window.SalaryCountdown.defaults();keep();return;
+ }
  if(action==="reviewAccount"){if(target.dataset.id)accountPick=target.dataset.id;page="accounts";sub="review";render();return;}
  if(action==="reviewLedger"){page="moves";sub="review";render();return;}
  if(action==="undoLastSms"){
@@ -1051,5 +1067,6 @@ document.addEventListener("change",async e=>{
  const file=e.target.files&&e.target.files[0];if(!file)return;
  try{await importFile(file)}catch(err){alert("تعذر الاستيراد: "+err.message)}finally{e.target.value=""}
 });
+window.setInterval?.(()=>window.SalaryCountdown?.refresh(document,data.salaryCountdown),1000);
 render();
 })();
