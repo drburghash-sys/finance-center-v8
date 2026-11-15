@@ -151,3 +151,26 @@ details.panel>summary{font-size:15px;font-weight:800;cursor:pointer}
 .sms-short-fields .form-field{min-width:0}
 .sms-short-fields [data-sms-row][hidden]{display:none!important}
 @media(max-width:650px){.sms-short-fields{grid-template-columns:1fr}.sms-preview strong{font-size:15px}}
+
+
+/* Salary countdown: display-only, independently configurable in Riyadh time */
+.salary-clock{padding:19px 21px;margin:0 0 17px;border:1px solid #cbd6f4;border-radius:22px;background:linear-gradient(125deg,#ffffff 0%,#f4f7ff 64%,#eeefff 100%);box-shadow:0 12px 30px #314c8b0e}
+.salary-clock-top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.salary-clock-top>div{display:grid;gap:2px}
+.salary-clock-kicker{color:#687b9d;font-size:11px;font-weight:800;letter-spacing:.1px}
+.salary-clock-top strong{font-size:clamp(17px,3vw,22px);font-weight:900;color:#263b69}
+.salary-clock-settings{font-size:12px!important;padding:8px 12px!important;white-space:nowrap}
+.salary-clock-units{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:15px 0}
+.salary-clock-units>div{background:#fff;border:1px solid #dce4f5;border-radius:14px;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 7px;box-shadow:0 3px 10px #1b31590a}
+.salary-clock-units>div strong{font-variant-numeric:tabular-nums;line-height:1.25;font-size:clamp(21px,4.2vw,34px);font-weight:950;color:#435dc8;letter-spacing:.2px}
+.salary-clock-units>div:nth-child(2) strong{color:#7363c0}
+.salary-clock-units>div:nth-child(3) strong{color:#197e93}
+.salary-clock-units>div:nth-child(4) strong{color:#b35c83}
+.salary-clock-units>div span{font-size:11px;color:#697c98;font-weight:800;margin-top:3px}
+.salary-clock-next{font-size:12px;color:#586d91;margin:5px 0 0;line-height:1.8}
+.salary-clock-next b{color:#344b75}
+.salary-clock-compact{padding:15px 18px}
+.salary-clock-compact .salary-clock-units{margin:11px 0}
+.salary-clock-editor .form-grid{margin:12px 0 14px}
+.salary-clock-editor select,.salary-clock-editor input{min-height:45px}
+@media(max-width:530px){.salary-clock{padding:14px;margin-bottom:13px}.salary-clock-top strong{font-size:16px}.salary-clock-settings{font-size:11px!important;padding:6px 10px!important}.salary-clock-units{gap:6px}.salary-clock-units>div{padding:7px 4px;border-radius:11px}.salary-clock-units>div strong{font-size:clamp(20px,5.5vw,29px)}.salary-clock-units>div span{font-size:10px}.salary-clock-next{font-size:11px}}
