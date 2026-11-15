@@ -72,7 +72,7 @@
  function dataInputs(data,opts={}){
    const now=opts.now||kMonth(),reference=monthlyPlan(data,now),base=monthlySaving(data,reference);
    const accounts=(data.accounts||[]).filter(x=>x.role==="reserve");
-   const reserve=accounts.reduce((s,a)=>s+Number(a.opening||0)+(data.moves||[]).reduce((total,m)=>{
+   const reserve=accounts.reduce((s,a)=>s+Number(a.opening||0)+Number(a.balanceAdjustment||0)+(data.moves||[]).reduce((total,m)=>{
      if(m.posted===false)return total;
      return total+(m.to===a.id?amount(m.amount):0)-(m.from===a.id&&!m.bankAlreadyPosted?amount(m.amount):0);
    },0),0);
