@@ -126,3 +126,13 @@ main{width:min(1240px,100% - 26px);margin:-12px auto 32px;flex:1}.nav-shell{back
 details.panel>summary{font-size:15px;font-weight:800;cursor:pointer}
 @media(max-width:760px){.obligation-due-row{align-items:flex-start;flex-direction:column;gap:7px}.obligation-two-status{justify-content:flex-start}}
 @media(max-width:540px){.obligation-kpis{grid-template-columns:1fr 1fr}.obligation-kpis>div:last-child{grid-column:1/-1}.obligation-forecast-controls{grid-template-columns:1fr}.obligation-comparison{grid-template-columns:1fr}.obligation-status{font-size:10px}.obligation-mini{grid-template-columns:58px 1fr}.obligation-mini b{font-size:9px}}
+
+/* Ledger integrity and reversible posting correction (visa/bank separation) */
+.ledger-warning{padding:13px 15px;background:#fff1ed;border:1px solid #efcbc6;border-right:4px solid #ce5761;color:#8c3147;border-radius:13px;line-height:1.8;font-size:13px;margin:12px 0}
+.sms-card-hint{background:#f0f4ff;border-right:4px solid #4f72d1;color:#415a84;padding:12px 14px;border-radius:11px;font-size:12px;line-height:1.8;margin:12px 0}
+.sms-undo{margin:12px 0;display:flex;justify-content:flex-start}
+.form-field[hidden]{display:none!important}
+.row-actions .danger,.button.danger{background:#fff0f1;color:#b7374e;border:1px solid #f0cbd3}
+.row-actions .danger:hover,.button.danger:hover{background:#fce4e7}
+.list-row{overflow-wrap:anywhere}
+@media(max-width:650px){.ledger-warning,.sms-card-hint{font-size:12px}.row-actions{gap:5px}.row-actions .mini{padding:6px 8px}}
