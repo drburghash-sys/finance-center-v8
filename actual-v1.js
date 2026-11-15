@@ -20,9 +20,9 @@ if(!data.legacy||typeof data.legacy!=="object")data.legacy={budgetMonths:{},inco
 let page="home",sub="summary",period=month(),modalType="",editingId="",chartKind="expenses",smsDraft=null,smsStatus="",bankPick="",accountPick="";
 const nav={
 home:[["summary","ملخص اليوم"],["recent","آخر الحركات"]],
-accounts:[["balances","الأرصدة بحسب البنك"],["funding","تأكيد تحويلات الحسابات"],["transfers","التحويلات"],["paste","لصق رسالة البنك"]],
+accounts:[["balances","الأرصدة بحسب البنك"],["funding","تأكيد تحويلات الحسابات"],["review","تدقيق حركات الحساب"],["transfers","التحويلات"],["paste","لصق رسالة البنك"]],
 budget:[["month","ميزانية الشهر"],["categories","المصروفات الفعلية"],["history","الأشهر السابقة"]],
-moves:[["ledger","سجل الحركات"],["income","الإيرادات"],["spend","المصروفات"],["paste","إدخال من رسالة"]],
+moves:[["ledger","سجل الحركات"],["review","مراجعة وتصحيح العمليات"],["income","الإيرادات"],["spend","المصروفات"],["paste","إدخال من رسالة"]],
 obligations:[["reserve","حساب الادخار"],["due","الاستحقاقات"],["forecast","تنبؤ تغطية الاستحقاقات"],["catalog","إدارة المواعيد"],["paid","المدفوع فعليًا"]],
 debts:[["balances","أرصدة الديون"],["payments","السداد المثبت"],["paste","لصق رسالة الفيزا"],["history","سجلات الفيزا المستوردة"]],
 investments:[["darahim","محفظة دراهم"],["profits","الأرباح الفعلية"],["legacy","أرباح دراهم في الميزانيات"]],
@@ -37,13 +37,14 @@ const acc=id=>data.accounts.find(x=>x.id===id);
 const debt=id=>data.debts.find(x=>x.id===id);
 const project=id=>data.projects.find(x=>x.id===id);
 const accountBalance=a=>Number(a.opening||0)+data.moves.reduce((v,m)=>v+(m.posted===false?0:((m.to===a.id?num(m.amount):0)-(m.from===a.id&&!m.bankAlreadyPosted?num(m.amount):0))),0);
-const debtsBalance=d=>Math.max(0,num(d.opening)+data.moves.reduce((v,m)=>{if(m.posted===false||m.debtId!==d.id)return v;return v+(m.kind==="charge"?num(m.amount):m.kind==="repayment"?-num(m.principal):0);},0));
+const debtMovement=m=>["charge","cash_advance"].includes(m.kind)?num(m.amount):m.kind==="refund"?-num(m.amount):m.kind==="repayment"?-num(m.principal):0;
+const debtsBalance=d=>Math.max(0,num(d.opening)+data.moves.reduce((v,m)=>m.posted===false||m.debtId!==d.id?v:v+debtMovement(m),0));
 const reserves=()=>data.accounts.filter(x=>x.role==="reserve");
-const banks=()=>data.accounts.filter(x=>x.role==="bank"||x.role==="reserve");
+const banks=()=>data.accounts.filter(x=>["bank","reserve","cash"].includes(x.role));
 const movements=(m=period)=>data.moves.filter(x=>x.date.slice(0,7)===m);
 const total=(a,selector)=>a.reduce((sum,x)=>sum+(selector?selector(x):num(x.amount)),0);
 const incomeM=(m=period)=>total(movements(m).filter(x=>x.kind==="income"||x.kind==="profit"));
-const expenseM=(m=period)=>total(movements(m).filter(x=>x.kind==="expense"||x.kind==="charge"));
+const expenseM=(m=period)=>total(movements(m).filter(x=>x.kind==="expense"||x.kind==="charge"))-total(movements(m).filter(x=>x.kind==="refund"));
 const paidM=(m=period)=>total(movements(m).filter(x=>x.kind==="repayment"));
 const netCash=()=>total(banks(),accountBalance);
 const reserveCash=()=>total(reserves(),accountBalance);
@@ -178,6 +179,7 @@ function contentImportReview(){
 }
 
 function bankGroup(a){
+ if(a.role==="cash")return "النقد في اليد";
  const t=String(a.bank||"غير مصنف").trim().toLowerCase().replace(/\s+/g,"");
  if(/d360|دي360|د٣٦٠/.test(t))return"D360";
  if(/أهلي|الاهلي|ncb|snb/.test(t))return"الأهلي";
@@ -238,7 +240,7 @@ function contentAccountFunding(){
  '<span class="fund-state">'+(fundedItems(account).length===0?"لا توجد بنود مخصصة لهذا الحساب":isAccountConfirmed(account)?"✓ تم تأكيد تحويل المخصص":"لم يؤكد تحويل المخصص بعد")+'</span>'+
  '<div class="hint">المطلوب تحويله لهذا الحساب: <b>'+money(fundedAmount(account))+'</b></div>'+
  '<div class="compact-list">'+fundedItems(account).map(x=>'<div class="list-row"><div><b>'+esc(x.name)+'</b><small>'+ (x.paid?"✓ تم تنفيذ البند":"○ لم يؤكد تنفيذ البند")+'</small></div><b>'+money(x.amount)+'</b></div>').join("")+'</div>'+
-  (fundedItems(account).length?button(isAccountConfirmed(account)?"إلغاء تأكيد هذا الحساب":"تأكيد تحويل هذا الحساب","toggleAccountFunding",account.id,isAccountConfirmed(account)?"outline":"primary"):"")+button("تعديل الحساب الفرعي","editAccount",account.id,"outline"):"")+'</div>';
+  (fundedItems(account).length?button(isAccountConfirmed(account)?"إلغاء تأكيد هذا الحساب":"تأكيد تحويل هذا الحساب","toggleAccountFunding",account.id,isAccountConfirmed(account)?"outline":"primary"):"")+button("تعديل الحساب الفرعي","editAccount",account.id,"outline")+button("مراجعة الحركات المؤثرة في الرصيد","reviewAccount",account.id,"primary"):"")+'</div>';
  const oldText=matching.length?'<p class="hint">من ميزانية V8 القديمة: '+matching.map(x=>esc(x.name)+" — "+(x.confirmed?"تم تأكيد المجموعة":"لم تؤكد المجموعة")).join(" • ")+'</p>':"";
  const names=groups.map(g=>{
   const active=g.children.filter(a=>fundedItems(a).length),complete=active.length>0&&active.every(isAccountConfirmed);
@@ -254,10 +256,11 @@ function contentAccountFunding(){
 
 function contentAccounts(){
  if(sub==="paste")return contentSMS();
+ if(sub==="review")return contentAccountAudit();
  if(sub==="funding")return contentAccountFunding();
  if(sub==="transfers"){
   const arr=data.moves.filter(x=>x.kind==="transfer").slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,35);
-  return panel("التحويلات بين الحسابات",entryList(arr.map(x=>({title:(acc(x.from)?.name||"—")+" ← "+(acc(x.to)?.name||"—"),subtitle:x.date+" • لا يعد مصروفًا",value:money(x.amount),actions:actions("Move",x.id)})), "لا توجد تحويلات"),button("تحويل جديد","newTransfer",null,"primary"));
+  return panel("التحويلات بين الحسابات",entryList(arr.map(x=>({title:(acc(x.from)?.name||"—")+" ← "+(acc(x.to)?.name||"—"),subtitle:x.date+" • لا يعد مصروفًا",value:money(x.amount),actions:actions("Move",x.id)})), "لا توجد تحويلات"),button("تحويل جديد","newTransfer",null,"primary")+button("مراجعة عمليات الحسابات","reviewAccount",null,"outline"));
  }
  return stats([box("الرصيد النقدي الكلي",netCash(),"يشمل حساب الالتزامات مرة واحدة","blue"),box("حساب الالتزامات",reserveCash(),"جزء من الإجمالي النقدي","violet"),box("دراهم والاستثمارات",invCash(),"أصول منفصلة عن النقد البنكي","amber")])+contentAccountFunding();
 }
@@ -326,13 +329,14 @@ function contentBudget(){
  '<p class="body-note">لون «تم تأكيد السداد» يعكس متابعتك في الميزانية ولا يُخصم مرة أخرى من البنك. لتعديل الرصيد الفعلي سجل عملية بنكية من الحسابات أو عن طريق لصق الرسالة.</p>'+
  panel("التنفيذ الفعلي",entryList([{title:"مصروفات فعلية",value:money(expenseM())},{title:"سداد ديون من البنك",value:money(paidM())},{title:"ادخار محوّل بالفعل",value:money(total(movements().filter(m=>m.kind==="transfer"&&acc(m.to)?.role==="reserve")))}]));
 }
-function moveName(m){return ({income:"دخل",expense:"مصروف",transfer:"تحويل بين حسابين",repayment:"سداد دين",charge:"شراء بالفيزا",profit:"ربح استثماري"})[m.kind]||m.legacyType||"حركة"}
-function moveAccounts(m){return m.kind==="charge"?(debt(m.debtId)?.name||"فيزا"):(acc(m.from)?.name||"")+(m.to?" ← "+(acc(m.to)?.name||""):"")}
+function moveName(m){return ({income:"دخل",expense:"مصروف",transfer:"تحويل بين حسابين",repayment:"سداد دين",charge:"شراء بالفيزا",cash_advance:"سحب نقدي من فيزا",refund:"استرداد فيزا",profit:"ربح استثماري"})[m.kind]||m.legacyType||"حركة"}
+function moveAccounts(m){return ["charge","cash_advance","refund"].includes(m.kind)?(debt(m.debtId)?.name||"فيزا")+(m.to?" ← "+(acc(m.to)?.name||""):""):m.kind==="repayment"?(m.bankAlreadyPosted?"خصم بنكي سبق تسجيله":"من "+(acc(m.from)?.name||"حساب"))+" ← "+(debt(m.debtId)?.name||"دين"):(acc(m.from)?.name||"")+(m.to?" ← "+(acc(m.to)?.name||""):"")}
 function contentMoves(){
  if(sub==="paste")return contentSMS();
- const kinds=sub==="income"?["income","profit"]:sub==="spend"?["expense","charge"]:null;
+ if(sub==="review")return contentLedgerReview();
+ const kinds=sub==="income"?["income","profit"]:sub==="spend"?["expense","charge","refund"]:null;
  const arr=data.moves.filter(x=>x.date.slice(0,7)===period&&(!kinds||kinds.includes(x.kind))).slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,100);
- return stats([box("دخل الشهر",incomeM(),"دخل وأرباح مدخلة","blue"),box("مصروف الشهر",expenseM(),"يشمل مشتريات الفيزا المسجلة","coral"),box("سداد الديون",paidM(),"تدفق نقدي وليس شراء جديدًا","amber")])+panel("حركات "+period,entryList(arr.map(m=>({title:moveName(m)+" • "+(m.category||"بدون تصنيف"),subtitle:m.date+" • "+moveAccounts(m)+(m.commitmentKey?" • مرتبط باستحقاق":""),value:money(m.amount),tag:m.importedHistory?"تاريخية ضمن الرصيد":m.kind==="transfer"?"ليس مصروفًا":"",negative:["expense","charge"].includes(m.kind),actions:m.importedHistory?"":actions("Move",m.id)})),"لا توجد حركات في هذا الشهر"),button("إضافة حركة","newMove",null,"primary"));
+ return stats([box("دخل الشهر",incomeM(),"دخل وأرباح مدخلة","blue"),box("مصروف الشهر",expenseM(),"يشمل مشتريات الفيزا المسجلة","coral"),box("سداد الديون",paidM(),"تدفق نقدي وليس شراء جديدًا","amber")])+panel("حركات "+period,entryList(arr.map(m=>({title:moveName(m)+" • "+(m.category||"بدون تصنيف"),subtitle:m.date+" • "+moveAccounts(m)+(m.commitmentKey?" • مرتبط باستحقاق":""),value:money(m.amount),tag:m.importedHistory?"تاريخية ضمن الرصيد":m.kind==="transfer"?"ليس مصروفًا":"",negative:["expense","charge"].includes(m.kind),actions:m.importedHistory?"":actions("Move",m.id)})),"لا توجد حركات في هذا الشهر"),button("إضافة حركة","newMove",null,"primary")+button("مراجعة الأخطاء والتراجع","reviewLedger",null,"outline"));
 }
 function addMonths(s,n){const a=s.split("-").map(Number);return monthKey(new Date(a[0],a[1]-1+Number(n),1))}
 function dueItems(){
@@ -378,9 +382,9 @@ function contentDebts(){
  const all=data.debts;
  if(sub==="payments"){
  const rows=data.moves.filter(x=>x.kind==="repayment").slice().sort((a,b)=>b.date.localeCompare(a.date));
- return panel("السداد من حساباتك الفعلية",entryList(rows.map(x=>({title:debt(x.debtId)?.name||"دين",subtitle:x.date+" • خُصم من أصل الدين: "+money(x.principal||0),value:money(x.amount),actions:actions("Move",x.id)})),"لم تُسجّل دفعات دين بعد"),button("إضافة سداد","newRepayment",null,"primary")+button("لصق رسالة فيزا","openSms",null,"outline"));
+ return panel("السداد من حساباتك الفعلية",entryList(rows.map(x=>({title:debt(x.debtId)?.name||"دين",subtitle:x.date+" • خُصم من أصل الدين: "+money(x.principal||0),value:money(x.amount),actions:actions("Move",x.id)})),"لم تُسجّل دفعات دين بعد"),button("إضافة سداد","newRepayment",null,"primary")+button("لصق رسالة فيزا","openSms",null,"outline")+button("مراجعة عمليات الدين","reviewLedger",null,"outline"));
  }
- return stats([box("إجمالي أرصدة الديون",sumDebt(),"قيم مُدخلة وليست محاكاة مستقبلية","coral"),box("المدفوع المسجل هذا الشهر",paidM(),"حركات سداد فعلية","blue")])+panel("ديونك",entryList(all.map(x=>({title:x.name,subtitle:(x.kind==="credit"?"بطاقة ائتمانية":"قرض أو تمويل")+" • الرصيد المرجعي بتاريخ "+(x.asOf||"غير محدد"),value:money(debtsBalance(x)),tag:x.source==="plan"?"من الملف":"مسجل",actions:actions("Debt",x.id)})),"أضف الدين أو استورد خطة الالتزامات"),button("إضافة دين","newDebt",null,"primary"))+
+ return stats([box("إجمالي أرصدة الديون",sumDebt(),"قيم مُدخلة وليست محاكاة مستقبلية","coral"),box("المدفوع المسجل هذا الشهر",paidM(),"حركات سداد فعلية","blue")])+panel("ديونك",entryList(all.map(x=>({title:x.name,subtitle:(x.kind==="credit"?"بطاقة ائتمانية":"قرض أو تمويل")+" • الرصيد المرجعي بتاريخ "+(x.asOf||"غير محدد"),value:money(debtsBalance(x)),tag:x.source==="plan"?"من الملف":"مسجل",actions:actions("Debt",x.id)})),"أضف الدين أو استورد خطة الالتزامات"),button("إضافة دين","newDebt",null,"primary")+button("تدقيق وتصحيح حركات الفيزا","reviewLedger",null,"outline"))+
  '<p class="body-note">قيمة القرض من ملف الخطة هي رصيد مرجعي وقت إدخالها؛ قد يتغير في البنك. لا نخصم الأقساط تلقائيًا من الرصيد: سجل الخصم الحقيقي من أصل الدين عند السداد.</p>';
 }
 function contentInvestment(){
