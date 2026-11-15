@@ -36,7 +36,8 @@ const titles={home:"لوحة الواقع",accounts:"الحسابات",budget:"�
 const acc=id=>data.accounts.find(x=>x.id===id);
 const debt=id=>data.debts.find(x=>x.id===id);
 const project=id=>data.projects.find(x=>x.id===id);
-const accountBalance=a=>Number(a.opening||0)+data.moves.reduce((v,m)=>v+(m.posted===false?0:((m.to===a.id?num(m.amount):0)-(m.from===a.id&&!m.bankAlreadyPosted?num(m.amount):0))),0);
+const accountMovementTotal=a=>data.moves.reduce((v,m)=>v+(m.posted===false?0:((m.to===a.id?num(m.amount):0)-(m.from===a.id&&!m.bankAlreadyPosted?num(m.amount):0))),0);
+const accountBalance=a=>Math.round((Number(a.opening||0)+Number(a.balanceAdjustment||0)+accountMovementTotal(a))*100)/100;
 const debtMovement=m=>["charge","cash_advance"].includes(m.kind)?num(m.amount):m.kind==="refund"?-num(m.amount):m.kind==="repayment"?-num(m.principal):0;
 const debtsBalance=d=>Math.max(0,num(d.opening)+data.moves.reduce((v,m)=>m.posted===false||m.debtId!==d.id?v:v+debtMovement(m),0));
 const reserves=()=>data.accounts.filter(x=>x.role==="reserve");
@@ -436,14 +437,15 @@ function contentAccountAudit(){
  const outflow=list.reduce((z,m)=>z+(m.from===a.id&&!m.bankAlreadyPosted?num(m.amount):0),0);
  const balance=accountBalance(a);
  const selectHtml='<label class="form-field"><span>اختر الحساب الذي تريد تدقيق رصيده</span><select id="auditAccount">'+options(choices.map(x=>[x.id,bankGroup(x)+" — "+x.name]),a.id)+'</select></label>';
- const warning=balance<-.005?'<p class="ledger-warning">الرصيد سالب. راجع العمليات أدناه، خصوصًا أي شراء بالفيزا سُجل على أنه مصروف بنكي. لا تعدّل الرصيد الافتتاحي لتغطية الخصم الخاطئ.</p>':"";
+ const warning=balance<-.005?'<p class="ledger-warning">الرصيد الحالي سالب. يمكنك تعديل الحساب وإدخال رصيده الحقيقي من كشف البنك؛ ستُحفظ التسوية دون حذف الحركات السابقة.</p>':"";
  return panel("مراجعة حركة الحساب — "+a.name,selectHtml+
-  stats([box("الافتتاحي",num(a.opening),"كما حفظته دون تعديل","blue"),
+  stats([box("الرصيد المرجعي",Number(a.opening||0),"كما كان عند الاستيراد أو إضافة الحساب","blue"),
    box("الحركات الواردة",inflow,"حركات فعالة بعد الاستيراد","violet"),
    box("الخصومات",outflow,"حركات فعالة بعد الاستيراد","coral"),
-   box("الرصيد المحسوب",balance,"الافتتاحي + الوارد − الصادر",balance<0?"coral":"blue")])+
+   box("تسوية الرصيد",Number(a.balanceAdjustment||0),"تصحيح مباشر لقيمة الرصيد الحالية","violet"),
+   box("الرصيد الفعلي",balance,"المرجعي + الحركات + التسوية",balance<0?"coral":"blue")])+
   warning+movementRows(list,"لا توجد حركات جديدة تؤثر في هذا الحساب")+
-  '<p class="body-note">إذا كان هناك خصم ٣٦٠ ريالًا لم يخرج من الحساب فعلًا، اختر «تصحيح العملية»، ثم غيّر نوعها إلى «شراء بالفيزا» واختر البطاقة. سيلغى أثرها البنكي وينتقل إلى رصيد دين الفيزا. وإذا كانت غير صحيحة بالكامل، اختر «إلغاء الحركة».</p>');
+  '<p class="body-note">لتحديث الرصيد مباشرة افتح «تعديل الحساب» واكتب الرقم الحقيقي من البنك؛ سيظهر الرقم نفسه بعد الحفظ. وتبقى الحركات القديمة محفوظة للمراجعة عند الحاجة.</p>');
 }
 function contentLedgerReview(){
  const actual=data.moves.filter(m=>m.posted!==false&&!m.importedHistory);
@@ -623,7 +625,7 @@ function select(label,name,items,selected,empty){return '<label class="form-fiel
 function editor(kind,id){
  modalType=kind;editingId=id||"";
  let title="",inner="",date=field("تاريخ العملية","date",now(),"date"),amount=field("المبلغ بالريال","amount","","number",'required');
- if(kind==="account"){title=editingId?"تعديل بيانات حساب موجود":"إضافة حساب حقيقي";inner=field("اسم الحساب","name","","text","required")+field("اسم البنك أو الجهة","bank")+field("آخر أربعة أرقام (اختياري)","last4")+field("بطاقات مدى المرتبطة (آخر ٤ أرقام، افصل بفاصلة)","cardsText")+field("الرصيد الافتتاحي قبل الحركات","opening","0","number","required")+select("نوع الحساب","role",[["bank","حساب بنكي"],["reserve","حساب الالتزامات (ادخار)"],["investment","محفظة استثمارية"],["cash","نقد في اليد / محفظة نقدية"]],"bank");}
+ if(kind==="account"){title=editingId?"تعديل الحساب ورصيده الفعلي":"إضافة حساب حقيقي";inner=field("اسم الحساب","name","","text","required")+field("اسم البنك أو الجهة","bank")+field("آخر أربعة أرقام (اختياري)","last4")+field("بطاقات مدى المرتبطة (آخر ٤ أرقام، افصل بفاصلة)","cardsText")+field("الرصيد الحالي الفعلي — كما يظهر في البنك","currentBalance",editingId&&acc(editingId)?accountBalance(acc(editingId)):"0","number","required")+ (editingId?'<p class="hint">اكتب الرصيد الحالي الذي تريده. عند الحفظ سيصبح الرقم المعروض مطابقًا لما كتبته، دون حذف الحركات القديمة أو زيادته عليها. تُحفظ الفروقات كتسوية داخل الحساب.</p>':'<p class="hint">عند إضافة الحساب، هذا هو الرصيد الحالي المعتمد الآن.</p>')+select("نوع الحساب","role",[["bank","حساب بنكي"],["reserve","حساب الالتزامات (ادخار)"],["investment","محفظة استثمارية"],["cash","نقد في اليد / محفظة نقدية"]],"bank");}
  else if(kind==="budgetSalary"){title="تعديل الراتب المخطط لشهر "+period;inner=field("الشهر","month",period,"month","readonly")+field("الراتب المخطط","salary",incomePlanForMonth(period).salary,"number","required");}
  else if(kind==="budgetIncome"){title=editingId?"تعديل دخل إضافي":"إضافة دخل آخر";inner=field("الشهر","month",period,"month","readonly")+field("مصدر الدخل (مثال: أرباح دراهم)","name","","text","required")+field("المبلغ المتوقع لهذا الشهر","amount","","number","required");}
  else if(kind==="budget"){title="إضافة بند ميزانية";inner=field("الشهر","month",period,"month","required")+field("اسم البند","name","","text","required")+field("المخصص للشهر","amount","","number","required")+select("نوع التخصيص","type",[["expense","مصروف مخطط"],["debt","قسط دين مخطط"],["saving","تحويل ادخار للالتزامات"],["investment","استثمار مخطط"]],"expense")+select("البنك / الحساب المخصص لتنفيذ هذا البند","bankAccountId",data.accounts.filter(a=>a.role==="bank"||a.role==="reserve"||a.role==="investment").map(a=>[a.id,bankGroup(a)+" — "+a.name]),"","غير محدد (يرجى الاختيار)");}
@@ -700,7 +702,7 @@ function validateFinancialMove(m,previous){
  const bankOut=["expense","transfer"].includes(m.kind)||m.kind==="repayment"&&!m.bankAlreadyPosted;
  if(bankOut){
    const a=acc(m.from);
-   const baseline=Number(a.opening||0)+data.moves.reduce((sum,x)=>x.id===skip||x.posted===false?sum:sum+(x.to===a.id?num(x.amount):0)-(x.from===a.id&&!x.bankAlreadyPosted?num(x.amount):0),0);
+   const baseline=Number(a.opening||0)+Number(a.balanceAdjustment||0)+data.moves.reduce((sum,x)=>x.id===skip||x.posted===false?sum:sum+(x.to===a.id?num(x.amount):0)-(x.from===a.id&&!x.bankAlreadyPosted?num(x.amount):0),0);
    if(baseline+.005<amount&&!confirm("سيسبب هذا الخصم رصيدًا بنكيًا سالبًا. تأكد أن الخصم من البنك فعلًا وليس من الفيزا. متابعة؟"))throw Error("أُلغي الخصم لحماية الحساب من تصنيف خاطئ");
  }
 }
@@ -724,7 +726,26 @@ function saveForm(form){
   else bucket.lines.push({id:uid(),name,amount});
   period=m;
  }
- else if(kind==="account"){if(!v.name.trim())throw Error("أدخل اسم الحساب");storeRecord("accounts",{id:uid(),name:v.name.trim(),bank:v.bank||"",last4:v.last4||"",role:v.role,opening:Number(v.opening)||0,cards:String(v.cardsText||"").split(/[،,\s;]+/).map(x=>x.trim()).filter(x=>/^\d{4}$/.test(x))});}
+ else if(kind==="account"){
+  if(!v.name.trim())throw Error("أدخل اسم الحساب");
+  const desired=Number(v.currentBalance);
+  if(v.currentBalance===""||!Number.isFinite(desired)||desired<0)throw Error("أدخل الرصيد الحالي الصحيح من البنك");
+  if(!["bank","reserve","investment","cash"].includes(v.role))throw Error("اختر نوع حساب صحيح");
+  const prior=editingId?acc(editingId):null;
+  if(editingId&&!prior)throw Error("لم أجد الحساب المراد تعديله");
+  const oldBalance=prior?accountBalance(prior):null;
+  // Reconcile to the explicitly entered current balance instead of treating it as an opening value.
+  // Retain all recorded movements and the original imported reference balance.
+  const opening=prior?Number(prior.opening||0):desired;
+  const adjustment=prior?Math.round((Number(prior.balanceAdjustment||0)+desired-oldBalance)*100)/100:0;
+  const record={id:prior?.id||uid(),name:v.name.trim(),bank:v.bank||"",last4:v.last4||"",role:v.role,
+    opening,balanceAdjustment:adjustment,cards:String(v.cardsText||"").split(/[،,\s;]+/).map(x=>x.trim()).filter(x=>/^\d{4}$/.test(x))};
+  storeRecord("accounts",record);
+  if(prior&&Math.abs(desired-oldBalance)>.005){
+    if(!Array.isArray(data.balanceReconciliations))data.balanceReconciliations=[];
+    data.balanceReconciliations.push({accountId:prior.id,at:new Date().toISOString(),before:oldBalance,after:desired,difference:Math.round((desired-oldBalance)*100)/100});
+  }
+}
  else if(kind==="budget"){
    if(!v.name.trim()||!v.month)throw Error("أكمل اسم البند والشهر");
    const old=data.budget.find(x=>x.id===editingId);
