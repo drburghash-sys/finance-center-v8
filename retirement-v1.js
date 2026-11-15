@@ -19,7 +19,7 @@ const latestBudget=d=>{
  return (d.budget||[]).filter(x=>x.month===byMonth);
 };
 const dataSnapshot=d=>{
- const accountBalance=a=>signed(a.opening)+ (d.moves||[]).reduce((s,m)=>s+(m.posted===false?0:((m.to===a.id?n(m.amount):0)-(m.from===a.id&&!m.bankAlreadyPosted?n(m.amount):0))),0);
+ const accountBalance=a=>signed(a.opening)+signed(a.balanceAdjustment)+ (d.moves||[]).reduce((s,m)=>s+(m.posted===false?0:((m.to===a.id?n(m.amount):0)-(m.from===a.id&&!m.bankAlreadyPosted?n(m.amount):0))),0);
  const bank=(d.accounts||[]).filter(x=>x.role==="bank"||x.role==="cash"),reserve=(d.accounts||[]).filter(x=>x.role==="reserve");
  const investments=(d.accounts||[]).filter(x=>x.role==="investment");
  const debts=(d.debts||[]).filter(x=>x.kind==="credit");
