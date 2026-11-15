@@ -92,7 +92,7 @@ function isSameSms(raw,parsed){
 function matchingMoneyMovement(kind,sum,date,debtId,from){
  return data.moves.find(m=>m.posted!==false&&!m.importedHistory&&Math.abs(num(m.amount)-sum)<.005&&
   Math.abs(new Date(m.date).getTime()-new Date(date).getTime())<=86400000&&
-  (kind==="repayment"?(m.kind==="repayment"&&m.debtId===debtId||(m.kind==="expense"&&m.from===from&&/فيزا|visa|بطاقة|سداد/i.test((m.raw||"")+" "+(m.category||"")))):
+  (kind==="repayment"?(m.kind==="repayment"&&m.debtId===debtId||(m.kind==="expense"&&!!from&&m.from===from)):
    (m.kind===kind&&["charge","cash_advance","refund"].includes(kind)&&m.debtId===debtId&&!!debtId)));
 }
 function smsCanAutoPost(d){
@@ -307,7 +307,7 @@ function contentAccountFunding(){
  return stats([countBox("البنوك المكتملة",completed,"من "+groups.length+" بنوك","violet"),countBox("حسابات مؤكدة",data.accounts.filter(isAccountConfirmed).length,"من "+data.accounts.length+" حساب","blue")])+
  panel("تأكيد تحويلات "+period,selector+bankBanner+acct+
  '<div class="buttons">'+button(allDone?"إلغاء تأكيد جميع حسابات البنك":"تأكيد جميع حسابات البنك","toggleBankFunding",bankPick,allDone?"outline":"primary")+
- button("إضافة حساب فرعي","newAccount",null,"outline")+button("لصق رسالة بنك","openSms",null,"outline")+'</div>'+oldText+
+ button("إضافة حساب فرعي","newAccount",null,"outline")+'</div>'+oldText+
  '<p class="body-note">هذا التأكيد يغيّر حالة المتابعة ولون البنك والحساب لهذا الشهر فقط. لا ينشئ حركة بنكية ولا يغيّر الرصيد. لتسجيل تحويل نقدي فعلي استخدم «تحويل جديد» أو لصق رسالة البنك.</p>')+
  panel("حالة جميع البنوك",entryList(names));
 }
@@ -382,7 +382,7 @@ function contentBudget(){
  const visaActual=total(data.moves.filter(x=>x.posted!==false&&x.date.slice(0,7)===period&&x.kind==="repayment"&&debt(x.debtId)?.kind==="credit"),x=>num(x.principal));
  const visaPlanned=total(items.filter(isVisaBudget));
  const paidCount=items.filter(x=>x.paid&&!isVisaBudget(x)).length;
- const budgetRows=items.map(x=>'<div class="budget-line '+(x.paid?'confirmed':'pending')+'"><div class="budget-item-main"><b>'+esc(x.name)+'</b><small>'+esc(x.category||x.type||"مصروف مخطط")+'</small><small>البنك المخصص: '+(linkedAccount(x)?esc(bankGroup(linkedAccount(x))+" ← "+linkedAccount(x).name):"غير محدد — اضغط تعديل")+'</small><strong>'+money(x.amount)+'</strong></div><div class="budget-item-state">'+pill(isVisaBudget(x)?(visaPlanned>0&&visaActual>=visaPlanned?'✓ الفيزا مدفوعة':'سداد مسجل: '+money(visaActual)):(x.paid?'✓ متابعة مكتملة':'لم يُؤكد'),(isVisaBudget(x)?visaPlanned>0&&visaActual>=visaPlanned:x.paid)?'done':'warn')+
+ const budgetRows=items.map(x=>'<div class="budget-line '+((isVisaBudget(x)?visaPlanned>0&&visaActual>=visaPlanned:x.paid)?'confirmed':'pending')+'"><div class="budget-item-main"><b>'+esc(x.name)+'</b><small>'+esc(x.category||x.type||"مصروف مخطط")+'</small><small>البنك المخصص: '+(linkedAccount(x)?esc(bankGroup(linkedAccount(x))+" ← "+linkedAccount(x).name):"غير محدد — اضغط تعديل")+'</small><strong>'+money(x.amount)+'</strong></div><div class="budget-item-state">'+pill(isVisaBudget(x)?(visaPlanned>0&&visaActual>=visaPlanned?'✓ الفيزا مدفوعة':'سداد مسجل: '+money(visaActual)):(x.paid?'✓ متابعة مكتملة':'لم يُؤكد'),(isVisaBudget(x)?visaPlanned>0&&visaActual>=visaPlanned:x.paid)?'done':'warn')+
  (isVisaBudget(x)?'<small>الحالة من الرسائل الفعلية فقط</small>':button(x.paid?'إلغاء متابعة البند':'تأكيد متابعة البند','toggleBudgetPaid',x.id,x.paid?'outline':'primary'))+actions("Budget",x.id)+'</div></div>').join('');
  return varianceBox+incomeSourcesPanel(period)+metrics+stats([box("بنود مؤكدة",paidCount,"من "+items.length+" بندًا","blue"),box("قيمة بنود المتابعة",total(items.filter(x=>x.paid&&!isVisaBudget(x))),"ليست خصمًا بنكيًا","violet")])+
  panel("بنود ميزانية "+period,(items.length?'<div class="budget-list">'+budgetRows+"</div>":blank("لم تُنشأ ميزانية لهذا الشهر")),button("إضافة بند","newBudget",null,"primary")+button("نسخ بنود الشهر السابق","copyPrevBudget",null,"outline"))+
@@ -861,6 +861,12 @@ $("monthNav").addEventListener("change",e=>{if(e.target.value)period=e.target.va
 $("prevMonth").addEventListener("click",()=>{period=changeMonth(period,"prev");render()});
 $("nextMonth").addEventListener("click",()=>{period=changeMonth(period,"next");render()});
 $("quickAction").addEventListener("click",()=>{page="moves";sub="paste";smsDraft=null;smsStatus="";render();});
+$("content").addEventListener("input",e=>{
+ if(e.target?.id!=="smsRaw"||e.inputType!=="insertFromPaste")return;
+ const value=e.target.value?.trim();
+ if(!value)return;
+ try{processIncomingSms(value)}catch(err){smsDraft=null;smsStatus="تعذر قراءة الرسالة: "+err.message;render()}
+});
 $("content").addEventListener("paste",e=>{
  if(e.target?.id!=="smsRaw")return;
  const value=e.clipboardData?.getData("text")||"";
