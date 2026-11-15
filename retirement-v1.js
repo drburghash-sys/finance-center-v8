@@ -20,10 +20,10 @@ const latestBudget=d=>{
 };
 const dataSnapshot=d=>{
  const accountBalance=a=>signed(a.opening)+ (d.moves||[]).reduce((s,m)=>s+(m.posted===false?0:((m.to===a.id?n(m.amount):0)-(m.from===a.id&&!m.bankAlreadyPosted?n(m.amount):0))),0);
- const bank=(d.accounts||[]).filter(x=>x.role==="bank"),reserve=(d.accounts||[]).filter(x=>x.role==="reserve");
+ const bank=(d.accounts||[]).filter(x=>x.role==="bank"||x.role==="cash"),reserve=(d.accounts||[]).filter(x=>x.role==="reserve");
  const investments=(d.accounts||[]).filter(x=>x.role==="investment");
  const debts=(d.debts||[]).filter(x=>x.kind==="credit");
- const visa=debts.reduce((s,x)=>s+Math.max(0,n(x.opening)+(d.moves||[]).reduce((t,m)=>t+(m.posted===false||m.debtId!==x.id?0:m.kind==="charge"?n(m.amount):m.kind==="repayment"?-n(m.principal):0),0)),0);
+ const visa=debts.reduce((s,x)=>s+Math.max(0,n(x.opening)+(d.moves||[]).reduce((t,m)=>t+(m.posted===false||m.debtId!==x.id?0:["charge","cash_advance"].includes(m.kind)?n(m.amount):m.kind==="refund"?-n(m.amount):m.kind==="repayment"?-n(m.principal):0),0)),0);
  const darahim=investments.filter(a=>/دراهم|darahim/i.test((a.name||"")+" "+(a.bank||"")));
  return {cash:bank.reduce((s,a)=>s+accountBalance(a),0),reserve:reserve.reduce((s,a)=>s+accountBalance(a),0),portfolio:darahim.reduce((s,a)=>s+accountBalance(a),0),visa,hasPortfolio:darahim.length>0,hasVisa:debts.length>0};
 };
