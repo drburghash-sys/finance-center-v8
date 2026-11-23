@@ -28,7 +28,7 @@ function apply(d){
  // Preserve all historical account balances and transactions, and do not count a receivable as cash.
  const car=(d.commitments||[]).find(x=>x.id==="plan-goal-car"||/شراءسيارةثانية/.test(norm(x.name)));
  if(car){car.useObligations=false;car.obligationFundingExplicit=true;car.fundingSource="salary"}
- const r=d.retirement||{};r.loanEnd="2036-08";r.loanPayment=19226;r.restoreRemaining=Math.max(N(r.restoreRemaining),52000);
+ const r=d.retirement||{};r.loanEnd="2036-08";r.loanPayment=19226;r.loanSchedule2026=true;r.restoreRemaining=Math.max(N(r.restoreRemaining),52000);
  r.during={...(r.during||{}),visa:2000,invest:0};
  r.after={...(r.after||{}),visa:2000,invest:550};
  // Old hypothetical 50k portfolio draw is NOT an actual transaction.
