@@ -91,7 +91,7 @@ function simulate(d){
    if(requested>taken)warnings.push("السحب المخطط في "+event.month+" تجاوز قيمة المحفظة المقدرة؛ تم احتساب المتاح فقط.");
    schedule={during:{...defAlloc(),...(event.during||{})},after:{...defAlloc(),...(event.after||{})}};
   }
-  const allocation=remaining>0.005?schedule.during:schedule.after;
+  const allocation={...(remaining>0.005?schedule.during:schedule.after)};if(d.meeting20261123?.version>=2){allocation.visa=month==="2026-12"?5000:2000;if(month<="2027-02")allocation.invest=0;}
   const income=retired?n(o.pension):n(o.salary);
   const living=n(o.living)*Math.pow(1+n(o.annualInflation)/100,year);
   const loanPayment=o.loanSchedule2026===true?((month<="2030-02"?15370:0)+(month<="2036-08"?3856:0)):(o.loanEnd&&start+i>mi(o.loanEnd))?0:n(o.loanPayment);
