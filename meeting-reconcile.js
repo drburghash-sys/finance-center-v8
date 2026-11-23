@@ -6,7 +6,8 @@ const index=m=>Number(m.slice(0,4))*12+Number(m.slice(5,7))-1;
 const ym=t=>Math.floor(t/12)+"-"+String(t%12+1).padStart(2,"0");
 function apply(d){
  if(!d||!Array.isArray(d.budget)||!d.budget.length)return false;
- if(d[TAG]?.version>=3)return false;\n if(d[TAG]?.version===2){d.retirement=d.retirement||{};d.retirement.loanSchedule2026=true;d[TAG].version=3;return true;}
+ if(d[TAG]?.version>=3)return false;
+ if(d[TAG]?.version===2){d.retirement=d.retirement||{};d.retirement.loanSchedule2026=true;d[TAG].version=3;return true;}
  const dec=d.budget.filter(x=>x.month==="2026-12");
  if(!dec.length)return false;
  const budget=(month)=>d.budget.filter(x=>x.month===month);
