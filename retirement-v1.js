@@ -67,7 +67,7 @@ function goals(data,start,end){
    const m=first+i*gap;if(m<start||m>=end)continue;
    const key=c.id+"-"+i,already=(data.moves||[]).filter(x=>x.commitmentKey===key&&x.kind==="expense").reduce((s,x)=>s+n(x.amount),0);
    const need=Math.max(0,n(c.amount)-already);if(need<=0)continue;
-   events.push({month:m,amount:need,name:c.name||"استحقاق",project:/مشروع|بناء|عقار/i.test(c.name||""),useReserve:!!c.useObligations||/مدرس|تعليم|رسوم|صيان|سيار|مركب/i.test(c.name||"")});
+   events.push({month:m,amount:need,name:c.name||"استحقاق",project:/مشروع|بناء|عقار/i.test(c.name||""),useReserve:c.obligationFundingExplicit===true?!!c.useObligations:(!!c.useObligations||/مدرس|تعليم|رسوم|صيان|سيار|مركب/i.test(c.name||""))});
   }
  });
  return events;
@@ -94,10 +94,10 @@ function simulate(d){
   const allocation=remaining>0.005?schedule.during:schedule.after;
   const income=retired?n(o.pension):n(o.salary);
   const living=n(o.living)*Math.pow(1+n(o.annualInflation)/100,year);
-  const loanPayment=(o.loanEnd&&start+i>mi(o.loanEnd))?0:n(o.loanPayment);
+  const loanPayment=o.loanSchedule2026===true?((month<="2030-02"?15370:0)+(month<="2036-08"?3856:0)):(o.loanEnd&&start+i>mi(o.loanEnd))?0:n(o.loanPayment);
   const addedCard=n(o.visaNew)+n(o.visaFees)+visa*n(o.visaAPR)/1200;
   visa+=addedCard;
-  let payVisa=Math.min(visa,n(allocation.visa));visa-=payVisa;
+  let payVisa=Math.min(visa,month>="2027-01"&&o.visaPlan2027===true?2000:n(allocation.visa));visa-=payVisa;
   let restore=Math.min(remaining,n(allocation.restore));remaining-=restore;portfolio+=restore;
   let invest=n(allocation.invest),toProjects=n(allocation.projects),toObligations=n(allocation.obligations);
   // If the restore target finishes, unused planned restore allocation remains unspent this month.
