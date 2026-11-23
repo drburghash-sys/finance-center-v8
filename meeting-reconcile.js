@@ -6,7 +6,7 @@ const index=m=>Number(m.slice(0,4))*12+Number(m.slice(5,7))-1;
 const ym=t=>Math.floor(t/12)+"-"+String(t%12+1).padStart(2,"0");
 function apply(d){
  if(!d||!Array.isArray(d.budget)||!d.budget.length)return false;
- if(d[TAG]?.version>=2)return false;
+ if(d[TAG]?.version>=3)return false;\n if(d[TAG]?.version===2){d.retirement=d.retirement||{};d.retirement.loanSchedule2026=true;d[TAG].version=3;return true;}
  const dec=d.budget.filter(x=>x.month==="2026-12");
  if(!dec.length)return false;
  const budget=(month)=>d.budget.filter(x=>x.month===month);
@@ -34,12 +34,12 @@ function apply(d){
  // Old hypothetical 50k portfolio draw is NOT an actual transaction.
  r.draws=(r.draws||[]).filter(x=>!(x.month==="2027-12"&&N(x.amount)===50000));
  d.retirement=r;
- d[TAG]={version:2,appliedAt:new Date().toISOString(),salary:47233,pension:30000,loan1Payment:15370,loan1LastMonth:"2030-02",loan2Payment:3856,loan2LastMonth:"2036-08",visaFrom:"2027-01",visaPayment:2000,clothingStart:"2026-12",clothing:1000,driverStart:"2027-01",driver:2000,wifeMonthsRemaining:7,wifeMonthly:1000,carFrom:"2028-12",carPayment:2500,carSource:"salary",schoolsSource:"reserve",reserveSaving:1738,restoreRemaining:52000,profitMode:"actual_only",profitSplit:"from_actual_transactions",note:"No modifications to account balances, debt balances, or actual moves. 2027+ plan is forecast-driven."};
+ d[TAG]={version:3,appliedAt:new Date().toISOString(),salary:47233,pension:30000,loan1Payment:15370,loan1LastMonth:"2030-02",loan2Payment:3856,loan2LastMonth:"2036-08",visaFrom:"2027-01",visaPayment:2000,clothingStart:"2026-12",clothing:1000,driverStart:"2027-01",driver:2000,wifeMonthsRemaining:7,wifeMonthly:1000,carFrom:"2028-12",carPayment:2500,carSource:"salary",schoolsSource:"reserve",reserveSaving:1738,restoreRemaining:52000,profitMode:"actual_only",profitSplit:"from_actual_transactions",note:"No modifications to account balances, debt balances, or actual moves. 2027+ plan is forecast-driven."};
  return true;
 }
 try{
  const raw=localStorage.getItem(KEY);if(!raw)return;
- const d=JSON.parse(raw);if(d[TAG]?.version>=2)return;
+ const d=JSON.parse(raw);if(d[TAG]?.version>=3)return;
  const before=JSON.stringify(d);
  if(!apply(d))return;
  localStorage.setItem(BACKUP,before);
