@@ -340,18 +340,7 @@ function contentAccounts(){
  return stats([box("الرصيد النقدي الكلي",netCash(),"يشمل حساب الالتزامات مرة واحدة","blue"),box("حساب الالتزامات",reserveCash(),"جزء من الإجمالي النقدي","violet"),box("دراهم والاستثمارات",invCash(),"أصول منفصلة عن النقد البنكي","amber")])+contentAccountFunding();
 }
 // A month-specific planning overlay protects the imported V8 data from destructive edits.
-function incomePlanForMonth(m){
- const legacy=data.legacy?.budgetMonths||{},overrides=data.budgetIncomeOverrides||{};
- const original=legacy[m]||null, own=overrides[m]||null;
- const months=[...new Set([...Object.keys(legacy),...Object.keys(overrides)])].filter(k=>/^\d{4}-\d{2}$/.test(k)&&k<=m).sort();
- const source=months.slice().reverse().find(k=>Number.isFinite(Number(overrides[k]?.salary))||Number.isFinite(Number(legacy[k]?.salary)))||null;
- const sourceSalary=source?(overrides[source]?.salary??legacy[source]?.salary):data.legacy?.future?.settings?.salary;
- const salary=Math.max(0,Number(own?.salary??original?.salary??sourceSalary)||0);
- const rawLines=Array.isArray(own?.lines)?own.lines:Array.isArray(original?.incomeLines)?original.incomeLines:[];
- const lines=rawLines.map((x,i)=>({id:String(x.id||'legacy-income-'+i),name:String(x.name||'دخل إضافي'),amount:Math.max(0,Number(x.amount)||0)}));
- const extras=lines.reduce((a,x)=>a+x.amount,0);
- return {salary,extras,total:salary+extras,lines,source,assumedFromPrevious:!!source&&source!==m&&!own&&!original,missing:!original&&!own&&!source};
-}
+function incomePlanForMonth(m){return window.FinanceCore.income(data,m);}
 function ensureIncomePlan(m){
  if(!data.budgetIncomeOverrides)data.budgetIncomeOverrides={};
  if(!data.budgetIncomeOverrides[m]){
@@ -378,7 +367,7 @@ function incomeSourcesPanel(m){
 function contentBudget(){
  if(sub==="history")return contentBudgetHistory();
  const items=data.budget.filter(x=>x.month===period);
- const planned=total(items);const saved=total(items.filter(x=>x.type==="saving"));
+ const planned=window.FinanceCore.month(data,period).planned;const saved=total(items.filter(x=>x.type==="saving"));
  const monthIncome=budgetIncomeForMonth(period),difference=monthIncome.total-planned;
  const deficit=difference<-0.005,surplus=difference>0.005;
  const varianceBox='<section class="budget-variance '+(deficit?'deficit':surplus?'surplus':'balanced')+'">'+
