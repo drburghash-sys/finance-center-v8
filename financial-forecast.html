@@ -1,6 +1,159 @@
-<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>الخطة المالية الموحدة</title><style>body{background:#f1f5fa;color:#172c45;font:16px system-ui;margin:auto;max-width:1100px;padding:16px}section{background:white;border:1px solid #dce5ee;border-radius:18px;padding:16px;margin:14px 0}a,button{color:#fff;background:#235d83;border:0;border-radius:10px;padding:10px;text-decoration:none;font:inherit}nav{display:flex;gap:8px;flex-wrap:wrap}h1{font-size:25px}h2{font-size:19px}small{color:#53677d}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px}.metric{background:#edf3f8;padding:14px;border-radius:12px}.metric b{display:block;font-size:22px;margin-top:8px}.bad{color:#b32635}.good{color:#147456}table{border-collapse:collapse;width:100%;font-size:14px}td,th{padding:10px;border-bottom:1px solid #e0e7ef;white-space:nowrap;text-align:right}.scroll{overflow:auto}select{font:inherit;padding:8px}details{margin:12px 0}</style><nav><a href="./">الرئيسية</a><a href="surplus.html">إدارة الفائض</a></nav><h1>الخطة المالية الموحدة</h1><small>قراءة مباشرة من الميزانية • لا تعديل للأرصدة الفعلية</small><section><label>السيناريو <select id="scenario"><option value="0">الأساسي — دون دخل إضافي افتراضي</option><option value="10">ضغط — زيادة المعيشة ١٠٪</option></select></label><p id="source"></p><div class="grid" id="metrics"></div></section><section><h2>التوقعات الشهرية والتقاعد</h2><label>عرض السنة <select id="year"><option value="">كل السنوات</option></select></label><div class="scroll"><table><thead><tr><th>الشهر</th><th>الدخل</th><th>البنود</th><th>سيارة إضافية</th><th>استحقاقات</th><th>صافي الشهر</th><th>الالتزام</th><th>النقد</th></tr></thead><tbody id="rows"></tbody></table></div></section><section><h2>التدقيق</h2><div id="audit"></div><small>الرصيد النقدي هنا توقع تراكمي قبل تخصيص الفائض المستقبلي، وليس رصيدًا بنكيًا. لا يفترض إعادة دراهم أو أرباحًا غير مسجلة. لا تشمل الخطة التضخم السنوي إلا اختبار الضغط المحدد.</small></section><script src="finance-core.js?v=1"></script><script>
-const $=x=>document.getElementById(x),C=FinanceCore,f=x=>Math.round(x).toLocaleString("ar-SA"),d=JSON.parse(localStorage.getItem("bms_actual_20261114_v1")||"null");
-for(let y=2026;y<=2036;y++)$("year").add(new Option(y,y));
-function run(){if(!d){$("source").textContent="لا توجد بيانات محلية. افتح البرنامج الرئيسي أولًا.";return}let reserve=(d.accounts||[]).filter(a=>a.role==="reserve").reduce((s,a)=>s+C.balance(d,a),0),cash=(d.accounts||[]).filter(a=>a.id==="emergency-reserve-v1").reduce((s,a)=>s+C.balance(d,a),0),start=Math.max(C.idx("2026-12"),C.idx(new Date().toISOString().slice(0,7))+1),firstCash="",firstReserve="",firstMonthly="",rows=[],stress=Number($("scenario").value)/100;for(let i=start;i<=C.idx("2036-08");i++){let m=C.ym(i),v=C.month(d,m,true),extra=v.other*stress,net=v.surplus-v.car-v.otherDue-extra;reserve+=v.saving-v.reserveDue;cash+=net;if(net<0&&!firstMonthly)firstMonthly=m;if(cash<0&&!firstCash)firstCash=m;if(reserve<0&&!firstReserve)firstReserve=m;rows.push({m,v,net,reserve,cash})}let a=rows[0];$("source").textContent=a?"بداية التوقع: "+a.m+" | المعاش من "+(d.retirement?.retirement||"2031-12"):"انتهت فترة التوقع";$("metrics").innerHTML=[["فائض أول شهر",a?f(a.net):"—"],["أول شهر بصافي سالب",firstMonthly||"لا يوجد"],["أول عجز نقدي تراكمي",firstCash||"لا يوجد"],["أول عجز الالتزام",firstReserve||"لا يوجد"]].map(([k,v])=>'<div class="metric">'+k+'<b>'+v+'</b></div>').join("");$("rows").innerHTML=rows.filter(x=>!$("year").value||x.m.startsWith($("year").value)).map(({m,v,net,reserve,cash})=>'<tr><td>'+m+'</td><td>'+f(v.income)+'</td><td>'+f(v.planned)+'</td><td>'+f(v.car)+'</td><td>'+f(v.reserveDue+v.otherDue)+'</td>'+[net,reserve,cash].map(x=>'<td class="'+(x<0?"bad":"good")+'">'+f(x)+'</td>').join("")+'</tr>').join("");$("audit").textContent="الميزانية وإدارة الفائض والتوقعات تستخدم محركًا مشتركًا. الأشهر المحفوظة تُقرأ كما هي؛ غير المحفوظة تُقدّر من آخر ميزانية مع قواعد الاجتماع. محرك التقاعد القديم مستقل ويحتاج مراجعة قبل مقارنة نتائجه."}
-$("year").onchange=$("scenario").onchange=run;run();
-</script></html>
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>الخطة المالية الموحدة</title
+  ><link rel="stylesheet" href="actual-v1.css?v=3" /><style>
+    body {
+      background: #f1f5fa;
+      color: #172c45;
+      font: 16px system-ui;
+      margin: auto;
+      max-width: 1100px;
+      padding: 16px;
+    }
+    section {
+      background: white;
+      border: 1px solid #dce5ee;
+      border-radius: 18px;
+      padding: 16px;
+      margin: 14px 0;
+    }
+    a,
+    button {
+      color: #fff;
+      background: #235d83;
+      border: 0;
+      border-radius: 10px;
+      padding: 10px;
+      text-decoration: none;
+      font: inherit;
+    }
+    nav {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    h1 {
+      font-size: 25px;
+    }
+    h2 {
+      font-size: 19px;
+    }
+    small {
+      color: #53677d;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+      gap: 10px;
+    }
+    .metric {
+      background: #edf3f8;
+      padding: 14px;
+      border-radius: 12px;
+    }
+    .metric b {
+      display: block;
+      font-size: 22px;
+      margin-top: 8px;
+    }
+    .bad {
+      color: #b32635;
+    }
+    .good {
+      color: #147456;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 14px;
+    }
+    td,
+    th {
+      padding: 10px;
+      border-bottom: 1px solid #e0e7ef;
+      white-space: nowrap;
+      text-align: right;
+    }
+    .scroll {
+      overflow: auto;
+    }
+    select {
+      font: inherit;
+      padding: 8px;
+    }
+    details {
+      margin: 12px 0;
+    }
+  </style>
+  <nav><a href="./">الرئيسية</a><a href="surplus.html">إدارة الفائض</a></nav>
+  <h1>الخطة المالية الموحدة</h1>
+  <small>قراءة مباشرة من الميزانية • لا تعديل للأرصدة الفعلية</small>
+  <section>
+    <label
+      >السيناريو
+      <select id="scenario">
+        <option value="0">الأساسي — دون دخل إضافي افتراضي</option>
+        <option value="10">ضغط — زيادة المعيشة ١٠٪</option>
+      </select></label
+    >
+    <p id="source"></p>
+    <div class="grid" id="metrics"></div>
+  </section>
+  <section>
+    <h2>التوقعات الشهرية والتقاعد</h2>
+    <label
+      >عرض السنة
+      <select id="year">
+        <option value="">كل السنوات</option>
+      </select></label
+    >
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>الشهر</th>
+            <th>الدخل</th>
+            <th>البنود</th>
+            <th>سيارة إضافية</th>
+            <th>استحقاقات</th>
+            <th>صافي الشهر</th>
+            <th>الالتزام</th>
+            <th>النقد</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+  <section>
+    <h2>التدقيق</h2>
+    <div id="audit"></div>
+    <small
+      >الرصيد النقدي هنا توقع تراكمي قبل تخصيص الفائض المستقبلي، وليس رصيدًا
+      بنكيًا. لا يفترض إعادة دراهم أو أرباحًا غير مسجلة. لا تشمل الخطة التضخم
+      السنوي إلا اختبار الضغط المحدد.</small
+    >
+  </section>
+  <script src="accounting-engine.js?v=3"></script>
+  <script src="finance-core.js?v=3"></script>
+  <script src="unified-forecast-ui.js?v=3"></script>
+  <script type="module">
+    try {
+      const store = await navigator.locks.request(
+        Accounting.KEY + ":write",
+        () => Accounting.storage(localStorage),
+      );
+      window.ForecastData = store.get();
+      document.body.innerHTML =
+        '<nav><a href="./">الرئيسية</a><a href="surplus.html">إدارة الفائض</a></nav><h1>الخطة المالية الموحدة</h1>' +
+        UnifiedForecastUI.controls() +
+        UnifiedForecastUI.view(ForecastData);
+      window.addEventListener("storage", () => location.reload());
+    } catch (e) {
+      document.body.textContent = "تعذر فتح البيانات: " + e.message;
+    }
+  </script>
+</html>
