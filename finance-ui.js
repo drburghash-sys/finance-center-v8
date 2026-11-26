@@ -457,6 +457,49 @@
   function planning() {
     const app = g.FinanceApp,
       d = app.get();
+    const categories = [
+      ["", "اختر دور البند"],
+      ["visa", "فيزا"],
+      ["wife", "صندوق الزوجة"],
+      ["driver", "سائق"],
+      ["clothes", "ملابس"],
+      ["invest", "استثمار"],
+      ["reserve", "التزامات"],
+      ["loan", "قروض"],
+      ["car", "سيارة"],
+    ];
+    const entries = [...(d.scheduleRules || []), {}];
+    const ruleFields = entries
+      .map(
+        (r, i) =>
+          "<fieldset><legend>" +
+          (i === entries.length - 1
+            ? "إضافة قاعدة (اختياري)"
+            : "قاعدة مستقبلية") +
+          "</legend>" +
+          select("r_category_" + i, "البند", categories, r.category || "") +
+          field("r_from_" + i, "يبدأ من", r.from || "", "month") +
+          field(
+            "r_amount_" + i,
+            "المخصص الشهري",
+            r.amount ?? "",
+            "number",
+            'min="0" step="0.01"',
+          ) +
+          field(
+            "r_until_" + i,
+            "آخر شهر (اتركه فارغًا للاستمرار)",
+            r.until || "",
+            "month",
+          ) +
+          (i < entries.length - 1
+            ? '<label><input type="checkbox" name="r_delete_' +
+              i +
+              '"> حذف هذه القاعدة</label>'
+            : "") +
+          "</fieldset>",
+      )
+      .join("");
     dialog(
       "قواعد الخطة الأساسية",
       select(
@@ -500,11 +543,20 @@
           "number",
           'min="0.01" step="0.01" required',
         ) +
-        '<label class="form-field"><span>قواعد تغير البنود المستقبلية (JSON: category, from, amount؛ until اختياري)</span><textarea name="rules" rows="8">' +
-        esc(JSON.stringify(d.scheduleRules, null, 2)) +
-        "</textarea></label><p>تطبق القواعد على الأشهر غير المحفوظة؛ الأشهر التي أدخلت ميزانيتها مستقلة. القروض ومواعيد انتهائها من محرر الديون. هذه إعدادات تخطيط، لا حركات مالية.</p>",
+        ruleFields +
+        "<p>تطبق القواعد على الأشهر غير المحفوظة؛ الأشهر التي أدخلت ميزانيتها مستقلة. القروض ومواعيد انتهائها من محرر الديون. هذه إعدادات تخطيط، لا حركات مالية.</p>",
       (v) => {
-        const rules = JSON.parse(v.rules);
+        const rules = entries.flatMap((r, i) => {
+          if (v["r_delete_" + i] || !v["r_category_" + i]) return [];
+          return [
+            {
+              category: v["r_category_" + i],
+              from: v["r_from_" + i],
+              amount: Number(v["r_amount_" + i]),
+              ...(v["r_until_" + i] ? { until: v["r_until_" + i] } : {}),
+            },
+          ];
+        });
         if (
           !Array.isArray(rules) ||
           rules.some(
@@ -620,16 +672,7 @@
         else if (action === "toggleAccountFunding") funding([b.dataset.id]);
         else if (action === "toggleBankFunding") {
           const bank = b.dataset.id,
-            bankName = (a) =>
-              /d360/i.test(a.bank)
-                ? "D360"
-                : /أهلي|اهلي/.test(a.bank)
-                  ? "الأهلي"
-                  : /انماء|إنماء/.test(a.bank)
-                    ? "الإنماء"
-                    : /stc/i.test(a.bank)
-                      ? "STC"
-                      : a.bank;
+            bankName = g.FinanceApp.bankGroup;
           funding(
             d.accounts
               .filter(

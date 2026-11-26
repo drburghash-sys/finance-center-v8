@@ -457,6 +457,55 @@ document.getElementById("run").onclick = async () => {
       );
     });
     await check(
+      "changing an unpaid item role and funding a cash group",
+      async () => {
+        navigate("budget");
+        change("#monthNav", "2026-12");
+        await click('[data-action="editBudget"][data-id="zero"]');
+        fill('#editorForm [name="type"]', "saving");
+        fill('#editorForm [name="financialCategory"]', "reserve");
+        fill('#editorForm [name="bankAccountId"]', "emergency-reserve-v1");
+        fill('#editorForm [name="amount"]', "25");
+        await click('#editorForm [type="submit"]');
+        assert(
+          state().budget.find((x) => x.id === "zero").financialCategory ===
+            "reserve",
+          "category stale",
+        );
+        assert(
+          win().FinanceCore.month(state(), "2026-12").saving === 525,
+          "saving category not reflected",
+        );
+        navigate("accounts", "funding");
+        change("#monthNav", "2026-12");
+        change("#fundBank", "النقد في اليد");
+        await click('[data-action="toggleBankFunding"]');
+        assert(
+          doc().querySelector('[name="mode_emergency-reserve-v1"]'),
+          "cash group omitted",
+        );
+        await click("[data-v3-close]");
+      },
+    );
+    await check(
+      "planning rules are editable through ordinary form fields",
+      async () => {
+        navigate("forecast", "allocations");
+        await click('[data-action="planningSettings"]');
+        assert(
+          doc().querySelector('[name="r_category_0"]'),
+          "rule editor missing",
+        );
+        assert(!doc().querySelector('textarea[name="rules"]'), "JSON required");
+        fill('[name="r_amount_0"]', "2100");
+        await click('.v3-modal [type="submit"]');
+        assert(
+          state().scheduleRules[0].amount === 2100,
+          "rule change not saved",
+        );
+      },
+    );
+    await check(
       "competing browser contexts serialize and reject stale revision",
       async () => {
         const other = document.createElement("iframe");
