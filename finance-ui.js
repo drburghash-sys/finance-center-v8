@@ -89,11 +89,153 @@
             7 * 86400000),
     );
   }
+  function payLoans(b) {
+    const app = g.FinanceApp,
+      d = app.get(),
+      rows = A.loanInstallments(d, b),
+      operationKey = id();
+    const linked = A.paymentStatus(d, b)
+      .moves.map(
+        (m) =>
+          '<div class="list-row"><span>' +
+          esc(d.debts.find((x) => x.id === m.debtId)?.name || "دفعة") +
+          " • " +
+          money(m.amount) +
+          '</span><button class="button mini danger" type="button" data-loan-undo="' +
+          esc(m.id) +
+          '">' +
+          (m.source === "budget-payment-v3" ? "عكس الدفعة" : "فك الربط فقط") +
+          "</button></div>",
+      )
+      .join("");
+    const fields = rows
+      .map(({ loan, due, paid }, i) => {
+        const existing = candidates(d, b).filter(
+          (m) => m.kind === "repayment" && m.debtId === loan.id,
+        );
+        return (
+          "<fieldset><legend>" +
+          esc(loan.name) +
+          "</legend><p>القسط الشهري " +
+          money(loan.monthlyPayment) +
+          " • المسجل " +
+          money(paid) +
+          " • المتبقي " +
+          money(due) +
+          "</p>" +
+          select(
+            "loan_existing_" + i,
+            "دفعة مسجلة سابقًا",
+            [
+              ["", "سداد جديد مؤكد"],
+              ...existing.map((m) => [
+                m.id,
+                m.date +
+                  " • " +
+                  money(m.amount) +
+                  " • " +
+                  (d.accounts.find((a) => a.id === m.from)?.name || "خصم سابق"),
+              ]),
+            ],
+            "",
+          ) +
+          field(
+            "loan_amount_" + i,
+            "المبلغ المسدد لهذا القرض",
+            due,
+            "number",
+            'min="0" step="0.01" required',
+          ) +
+          field(
+            "loan_principal_" + i,
+            "أصل الدين المسدد (اختياري حسب كشف البنك)",
+            "",
+            "number",
+            'min="0" step="0.01"',
+          ) +
+          "</fieldset>"
+        );
+      })
+      .join("");
+    dialog(
+      "تأكيد قسطي القروض معًا",
+      "<p>بند القروض " +
+        money(b.amount) +
+        ". يسجل كل قسط على قرضه، ويخصم مجموع الدفعتين من الحساب المختار مرة واحدة لكل دفعة. اترك أصل الدين فارغًا إذا لم يتضح في الكشف.</p>" +
+        linked +
+        select(
+          "from",
+          "الحساب الذي دفع القسطين",
+          accounts(d),
+          d.settings.salaryAccountId || A.accountFor(d, b)?.id,
+        ) +
+        field("date", "تاريخ الخصم", A.today(), "date", "required") +
+        fields +
+        '<p id="loan-total"></p><label><input name="confirmed" type="checkbox" required> أؤكد حدوث الخصم البنكي للدفعات المحددة وعدم تسجيلها سابقًا.</label>',
+      (v) => {
+        const next = A.payLoanGroup(d, {
+          itemId: b.id,
+          from: v.from,
+          date: v.date,
+          operationKey,
+          payments: rows.map((r, i) => ({
+            id: id(),
+            debtId: r.loan.id,
+            amount: v["loan_amount_" + i],
+            principal: v["loan_principal_" + i],
+            existing: v["loan_existing_" + i],
+          })),
+        });
+        Object.assign(d, next);
+        return app.save();
+      },
+    );
+    const update = () => {
+      let total = 0;
+      for (let i = 0; i < rows.length; i++) {
+        const selected = host.querySelector(
+          '[name="loan_existing_' + i + '"]',
+        ).value;
+        const input = host.querySelector('[name="loan_amount_' + i + '"]');
+        input.disabled = !!selected;
+        if (!selected) total += Number(input.value) || 0;
+      }
+      host.querySelector("#loan-total").textContent =
+        "إجمالي الخصم الجديد من الحساب: " + money(total);
+    };
+    host.addEventListener("input", update);
+    host.addEventListener("change", update);
+    update();
+    host.querySelectorAll("[data-loan-undo]").forEach(
+      (btn) =>
+        (btn.onclick = async () => {
+          if (!confirm("التراجع عن هذه الدفعة فقط؟")) return;
+          const m = d.moves.find((x) => x.id === btn.dataset.loanUndo);
+          if (m.source === "budget-payment-v3") A.reverse(d, m.id);
+          else {
+            A.audit(d, "unlink-budget", {
+              moveId: m.id,
+              before: {
+                budgetItemId: m.budgetItemId,
+                budgetMonth: m.budgetMonth,
+              },
+            });
+            delete m.budgetItemId;
+          }
+          if (await app.save()) {
+            host.remove();
+            pay(b.id);
+          }
+        }),
+    );
+  }
   function pay(bid) {
     const app = g.FinanceApp,
       d = app.get(),
       b = d.budget.find((x) => x.id === bid);
     if (!b) throw Error("البند غير موجود");
+    if (A.category(b) === "loan" && A.loanInstallments(d, b).length)
+      return payLoans(b);
     const status = A.paymentStatus(d, b),
       cat = A.category(b),
       debt = cat === "visa" || cat === "loan" || b.type === "debt",
@@ -153,7 +295,13 @@
             "debtId",
             "البطاقة أو القرض",
             d.debts
-              .filter((x) => cat !== "visa" || x.kind === "credit")
+              .filter((x) =>
+                cat === "visa"
+                  ? x.kind === "credit"
+                  : cat === "loan"
+                    ? x.kind === "loan"
+                    : true,
+              )
               .map((x) => [x.id, x.name + " " + money(A.debtBalance(d, x))]),
           ) +
           field(

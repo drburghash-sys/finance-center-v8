@@ -565,8 +565,97 @@
       },
     };
   }
+  function loanInstallments(d, item) {
+    return d.debts
+      .filter(
+        (x) =>
+          x.kind === "loan" &&
+          Number(x.monthlyPayment) > 0 &&
+          (!x.firstMonth || item.month >= x.firstMonth) &&
+          (!x.lastMonth || item.month <= x.lastMonth),
+      )
+      .map((loan) => {
+        const paid = sum(
+          d.moves.filter(
+            (m) =>
+              active(m) &&
+              m.kind === "repayment" &&
+              m.debtId === loan.id &&
+              m.budgetItemId === item.id &&
+              (m.budgetMonth || m.date.slice(0, 7)) === item.month,
+          ),
+          (m) => m.amount,
+        );
+        return {
+          loan,
+          paid,
+          due: Math.max(0, sar(val(loan.monthlyPayment) - val(paid))),
+        };
+      });
+  }
+  function payLoanGroup(d, request) {
+    const next = clone(d),
+      item = next.budget.find((b) => b.id === request.itemId);
+    if (!item || category(item) !== "loan") throw Error("اختر بند القروض");
+    const rows = loanInstallments(next, item),
+      seen = new Set();
+    let changed = false;
+    for (const p of request.payments) {
+      if (seen.has(p.debtId)) throw Error("القرض مكرر في الطلب");
+      seen.add(p.debtId);
+      const row = rows.find((r) => r.loan.id === p.debtId);
+      if (!row) throw Error("القرض غير مجدول لهذا الشهر");
+      if (p.existing) {
+        const m = next.moves.find(
+          (m) =>
+            m.id === p.existing &&
+            active(m) &&
+            m.kind === "repayment" &&
+            m.debtId === p.debtId &&
+            !m.budgetItemId,
+        );
+        if (!m || val(m.amount) > val(row.due))
+          throw Error("الدفعة السابقة تحتاج مراجعة قبل الربط");
+        link(next, m.id, item.id, item.month);
+        changed = true;
+        continue;
+      }
+      const amount = cents(p.amount);
+      if (amount === 0) continue;
+      if (amount < 0 || amount > val(row.due))
+        throw Error("المبلغ يتجاوز القسط المتبقي؛ راجع دفعات القرض");
+      const principal =
+        p.principal === "" || p.principal == null ? 0 : cents(p.principal);
+      if (principal > val(debtBalance(next, row.loan)))
+        throw Error("أصل السداد يتجاوز رصيد القرض");
+      post(next, {
+        id: p.id,
+        operationKey: request.operationKey + ":" + p.debtId,
+        kind: "repayment",
+        date: request.date,
+        budgetMonth: item.month,
+        budgetItemId: item.id,
+        amount: sar(amount),
+        principal: sar(principal),
+        principalKnown: p.principal !== "" && p.principal != null,
+        from: request.from,
+        debtId: p.debtId,
+        category: item.name,
+        source: "budget-payment-v3",
+        batchId: request.operationKey,
+        posted: true,
+      });
+      changed = true;
+    }
+    if (!changed)
+      throw Error("لا توجد دفعات جديدة؛ القسطان المسددان لا يسجلان مرتين");
+    if (request.from) item.bankAccountId = request.from;
+    return next;
+  }
   g.Accounting = {
     KEY,
+    loanInstallments,
+    payLoanGroup,
     VERSION,
     clone,
     cents,
