@@ -398,14 +398,14 @@ function contentBudget(){
  const metrics=stats([box("بنود مخططة للشهر",planned,"تتضمن تحويل الادخار إن وجد","blue"),box("منها ادخار مخطط",saved,"ليس مصروفًا فعليًا","violet"),box("المصروف الفعلي",expenseM(),"من الحركات المسجلة","coral")]);
  if(sub==="categories")return varianceBox+metrics+panel("المصروفات المنفذة حسب البند",bars(Object.entries(categories).sort((a,b)=>b[1]-a[1]),"تم احتساب الصرف من عمليات فعلية فقط"));
  const isVisaBudget=x=>/فيزا|visa|بطاقة ائتماني/i.test(x.name||"");
- const visaActual=total(data.moves.filter(x=>x.posted!==false&&x.date.slice(0,7)===period&&x.kind==="repayment"&&debt(x.debtId)?.kind==="credit"),x=>num(x.principal));
+ const visaActual=total(data.moves.filter(x=>x.posted!==false&&(x.budgetMonth||x.date.slice(0,7))===period&&x.kind==="repayment"&&debt(x.debtId)?.kind==="credit"),x=>num(x.principal));
  const visaPlanned=total(items.filter(isVisaBudget));
  const paidCount=items.filter(x=>x.paid&&!isVisaBudget(x)).length;
  const budgetRows=items.map(x=>'<div class="budget-line '+((isVisaBudget(x)?visaPlanned>0&&visaActual>=visaPlanned:x.paid)?'confirmed':'pending')+'"><div class="budget-item-main"><b>'+esc(x.name)+'</b><small>'+esc(x.category||x.type||"مصروف مخطط")+'</small><small>البنك المخصص: '+(linkedAccount(x)?esc(bankGroup(linkedAccount(x))+" ← "+linkedAccount(x).name):"غير محدد — اضغط تعديل")+'</small><strong>'+money(x.amount)+'</strong></div><div class="budget-item-state">'+pill(isVisaBudget(x)?(visaPlanned>0&&visaActual>=visaPlanned?'✓ الفيزا مدفوعة':'سداد مسجل: '+money(visaActual)):(x.paid?'✓ متابعة مكتملة':'لم يُؤكد'),(isVisaBudget(x)?visaPlanned>0&&visaActual>=visaPlanned:x.paid)?'done':'warn')+
- (isVisaBudget(x)?'<small>الحالة من الرسائل الفعلية فقط</small>':button(x.paid?'إلغاء متابعة البند':'تأكيد متابعة البند','toggleBudgetPaid',x.id,x.paid?'outline':'primary'))+actions("Budget",x.id)+'</div></div>').join('');
+ (isVisaBudget(x)?button("تأكيد سداد الفيزا","confirmVisaPayment",x.id,"primary"):button(x.paid?'إلغاء متابعة البند':'تأكيد متابعة البند','toggleBudgetPaid',x.id,x.paid?'outline':'primary'))+actions("Budget",x.id)+'</div></div>').join('');
  return varianceBox+incomeSourcesPanel(period)+metrics+stats([box("بنود مؤكدة",paidCount,"من "+items.length+" بندًا","blue"),box("قيمة بنود المتابعة",total(items.filter(x=>x.paid&&!isVisaBudget(x))),"ليست خصمًا بنكيًا","violet")])+
  panel("بنود ميزانية "+period,(items.length?'<div class="budget-list">'+budgetRows+"</div>":blank("لم تُنشأ ميزانية لهذا الشهر")),button("إضافة بند","newBudget",null,"primary")+button("نسخ بنود الشهر السابق","copyPrevBudget",null,"outline"))+
- '<p class="body-note">الميزانية تخطط وتتابع فقط؛ لا تسجل أي سداد فيزا. سداد الفيزا يأتي من «الحركات ← إدخال الرسائل» مرة واحدة.</p>'+
+ '<p class="body-note">تأكيد سداد الفيزا يسجل حركة مالية؛ لا تكررها برسالة البنك.</p>'+
  panel("التنفيذ الفعلي",entryList([{title:"مصروفات فعلية",value:money(expenseM())},{title:"سداد ديون من البنك",value:money(paidM())},{title:"ادخار محوّل بالفعل",value:money(total(movements().filter(m=>m.kind==="transfer"&&acc(m.to)?.role==="reserve")))}]));
 }
 function moveName(m){return ({income:"دخل",expense:"مصروف",transfer:"تحويل بين حسابين",repayment:"سداد دين",charge:"شراء بالفيزا",cash_advance:"سحب نقدي من فيزا",refund:"استرداد فيزا",profit:"ربح استثماري"})[m.kind]||m.legacyType||"حركة"}
@@ -536,8 +536,19 @@ function contentInvestment(){
  if(sub==="profits")return panel("الأرباح المستلمة فعلًا",entryList(profits.map(x=>({title:x.category||"ربح استثماري",subtitle:x.date+" • دخل إلى "+(acc(x.to)?.name||"الحساب"),value:money(x.amount),actions:actions("Move",x.id)})),"لم تسجل توزيعات أرباح مثبتة"),button("تسجيل ربح","newProfit",null,"primary"));
  return stats([box("المحفظة المسجلة",total(accounts,accountBalance),"قيمة مسجلة في آخر رصيد + الحركات","amber"),box("الأرباح المستلمة",total(profits),"مسجلة كدخل فعلي، وليست نموًا مفترضًا","violet")])+panel("الحسابات الاستثمارية",entryList(accounts.map(a=>({title:a.name,subtitle:"الأصل المسجل والحركات المرتبطة",value:money(accountBalance(a)),actions:actions("Account",a.id)})),"لا يوجد حساب استثماري حقيقي بعد"),button("إضافة محفظة","newInvestmentAccount",null,"primary"))+'<p class="body-note">لم نعد نحسب عائدًا افتراضيًا بنسبة ٦٪ أو تراكمًا لسنوات. الأرباح هنا لا تظهر إلا عندما تسجلها مستلمة أو داخلة إلى المحفظة فعليًا.</p>';
 }
+function autoSalary(){
+ const source=data.accounts.find(x=>x.legacyId==="ahli0105");if(!source)return;
+ const cfg=data.autoSalary||{},day=Math.min(28,Math.max(1,Number(cfg.day)||27)),today=now(),m=today.slice(0,7),date=m+"-"+String(day).padStart(2,"0"),budgetMonth=window.FinanceCore.ym(window.FinanceCore.idx(m)+1);
+ if(today<date||m<"2026-11")return;
+ const amount=Number(cfg.amount)||incomePlanForMonth(budgetMonth).salary;if(!(amount>0))return;
+ const id="auto-salary-"+m;
+ if(data.moves.some(x=>x.id===id||(x.posted!==false&&x.kind==="income"&&x.to===source.id&&x.date.slice(0,7)===m&&Math.abs(num(x.amount)-amount)<.005))||(data.voidedMoves||[]).some(x=>x.move?.id===id))return;
+ data.moves.push({id,date,kind:"income",amount,to:source.id,category:"راتب",source:"scheduled-salary",budgetMonth,posted:true,note:"إيداع مفترض وفق موعد الراتب؛ قابل للتصحيح"});
+ localStorage.setItem(KEY,JSON.stringify(data));
+}
+function autoSalaryPanel(){return panel("تسجيل الراتب تلقائيًا",'<label>يوم الصرف <input id="autoPayDay" type="number" min="1" max="28" value="'+(Number(data.autoSalary?.day)||27)+'"></label><label>المبلغ (صفر = راتب الميزانية) <input id="autoPayAmount" type="number" min="0" value="'+(Number(data.autoSalary?.amount)||0)+'"></label><p>يسجل عند فتح البرنامج في يوم الصرف أو بعده؛ ليس اتصالًا بالبنك.</p>',button("حفظ إعدادات التسجيل","saveAutoSalary",null,"primary"))}
 function contentSalary(){
- if(sub==="countdown")return window.SalaryCountdown?.settings(data.salaryCountdown)||panel("عداد الراتب",blank("تعذر تحميل عداد الراتب"));
+ if(sub==="countdown")return autoSalaryPanel()+(window.SalaryCountdown?.settings(data.salaryCountdown)||"");
  const s=data.legacy?.salaryCalc||{},months=data.legacy?.budgetMonths||{};
  if(sub==="monthly")return panel("الرواتب المسجلة في الميزانيات",entryList(Object.entries(months).sort((a,b)=>b[0].localeCompare(a[0])).map(([m,v])=>({title:"راتب شهر "+m,subtitle:"من ملف الميزانية الشامل؛ ليس إثبات حركة إيداع بنكي",value:money(v.salary)})),"لم تُستورد بيانات راتب شهرية"));
  const keys=[["base","الراتب الأساسي"],["housing","بدل السكن"],["transport","بدل النقل"],["other","بدلات أخرى"],["deductions","الاستقطاعات"],["bankDeductions","استقطاعات القروض البنكية"]];
@@ -545,7 +556,7 @@ function contentSalary(){
  const net=gross-num(s.deductions)-num(s.bankDeductions);
  return stats([box("الإجمالي حسب الحاسبة",gross,"من ملف الحاسبة المستورد","blue"),box("الصافي حسب الحاسبة",net,"لا يغيّر أرصدة الحسابات","violet")])+
  panel("تفاصيل آخر حاسبة راتب محفوظة",entryList(keys.map(([key,title])=>({title,value:money(s[key]||0)})),"لا توجد بيانات حاسبة راتب في الملف"))+
- '<p class="body-note">تظهر هنا أرقام حاسبة الراتب الموجودة في النسخة الشاملة. لا يُسجل الراتب دخلًا فعليًا تلقائيًا؛ استخدم لصق رسالة إيداع الراتب عندما تصل.</p>';
+ '<p class="body-note">تظهر هنا أرقام حاسبة الراتب الموجودة في النسخة الشاملة. التسجيل التلقائي متاح في إعدادات عداد الراتب.</p>';
 }
 
 function contentProjects(){
@@ -607,6 +618,7 @@ function contentData(){
  button("مسح بيانات المركز الجديد فقط","reset",null,"danger")+'</div><p class="hint">يمكن استيراد ملف خطة المستقبل المرفق، أو نسخة شاملة من V8 للحسابات والميزانية. لا تُرفع ملفاتك إلى GitHub.</p>');
 }
 function render(){
+ autoSalary();
  if(!nav[page])page="home";
  const choices=nav[page];if(!choices.some(x=>x[0]===sub))sub=choices[0][0];
  $("pageNav").value=page;$("subNav").innerHTML=options(choices,sub);
@@ -932,6 +944,8 @@ $("content").addEventListener("change",e=>{
 $("content").addEventListener("click",e=>{
  const target=e.target.closest("[data-action]");if(!target)return;
  const action=target.dataset.action;
+ if(action==="saveAutoSalary"){data.autoSalary={day:Math.min(28,Math.max(1,Number($("autoPayDay").value)||27)),amount:Math.max(0,Number($("autoPayAmount").value)||0)};keep();return;}
+ if(action==="confirmVisaPayment"){const x=data.budget.find(x=>x.id===target.dataset.id);const a=data.accounts.find(x=>x.legacyId==="ahli0105");const cards=data.debts.filter(x=>x.kind==="credit");if(!x||!a||!cards.length)return;const chosen=prompt("اختر رقم البطاقة: "+cards.map((v,i)=>(i+1)+" — "+v.name).join(" / "),"1");if(chosen===null)return;const card=cards[Number(chosen)-1];if(!card)return;const id="budget-visa-"+x.id;if(data.moves.some(m=>m.id===id)){alert("سبق تسجيل السداد");return}const amount=Math.min(num(x.amount),debtsBalance(card));if(!amount||!confirm("تأكيد سداد "+money(amount)+" من حساب الراتب إلى "+card.name+" دون تسجيل سابق؟"))return;data.moves.push({id,date:now(),budgetMonth:x.month,kind:"repayment",amount,principal:amount,from:a.id,debtId:card.id,category:x.name,source:"budget-visa",posted:true});keep();return;}
  const m={newAccount:"account",newBudget:"budget",newCommitment:"commitment",newDebt:"debt",newProject:"project",newInvestmentAccount:"account",newMove:"expense",newExpense:"expense",newTransfer:"transfer",newProfit:"profit"};
  if(action==="openSalaryCountdown"){page="salary";sub="countdown";render();return;}
  if(action==="saveSalaryCountdown"){
