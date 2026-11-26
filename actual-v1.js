@@ -289,8 +289,8 @@ function isAccountConfirmed(a){
 }
 function confirmFundingLedger(a,flags){
  const old=flags[a.id],source=data.accounts.find(x=>x.legacyId==="ahli0105")||data.accounts.find(x=>/نزول الراتب/.test(x.name||""));
- if(isAccountConfirmed(a)&&old?.ledgerId){alert("التحويل مسجل ماليًا. لتصحيح تحويل فعلي استخدم مراجعة الحركات، وليس إلغاء التأكيد.");return}
- const amount=fundedAmount(a);
+ if(isAccountConfirmed(a)){if(!confirm("إلغاء تأكيد الحساب وعكس الحركة المرتبطة إن وجدت؟"))return;if(old?.ledgerId){data.moves=data.moves.filter(m=>m.id!==old.ledgerId||m.source!=="budget-funding")}flags[a.id]=false;return}
+ const amount=fundedItems(a).filter(x=>!/فيزا|visa|قروض|بطاقة ائتماني/i.test(x.name||"")).reduce((s,x)=>s+num(x.amount),0);
  if(!source){alert("حدد حساب نزول الراتب أولًا");return}
  if(a.id===source.id||amount===0){flags[a.id]={signature:fundingSig(a),amount,confirmedAt:now()};return}
  if(!confirm("هل تم تحويل "+money(amount)+" فعليًا من "+source.name+" إلى "+a.name+" ولم يُسجل سابقًا في الحركات؟"))return;
@@ -402,7 +402,7 @@ function contentBudget(){
  const visaPlanned=total(items.filter(isVisaBudget));
  const paidCount=items.filter(x=>x.paid&&!isVisaBudget(x)).length;
  const budgetRows=items.map(x=>'<div class="budget-line '+((isVisaBudget(x)?visaPlanned>0&&visaActual>=visaPlanned:x.paid)?'confirmed':'pending')+'"><div class="budget-item-main"><b>'+esc(x.name)+'</b><small>'+esc(x.category||x.type||"مصروف مخطط")+'</small><small>البنك المخصص: '+(linkedAccount(x)?esc(bankGroup(linkedAccount(x))+" ← "+linkedAccount(x).name):"غير محدد — اضغط تعديل")+'</small><strong>'+money(x.amount)+'</strong></div><div class="budget-item-state">'+pill(isVisaBudget(x)?(visaPlanned>0&&visaActual>=visaPlanned?'✓ الفيزا مدفوعة':'سداد مسجل: '+money(visaActual)):(x.paid?'✓ متابعة مكتملة':'لم يُؤكد'),(isVisaBudget(x)?visaPlanned>0&&visaActual>=visaPlanned:x.paid)?'done':'warn')+
- (isVisaBudget(x)?button("تأكيد سداد الفيزا","confirmVisaPayment",x.id,"primary"):button(x.paid?'إلغاء متابعة البند':'تأكيد متابعة البند','toggleBudgetPaid',x.id,x.paid?'outline':'primary'))+actions("Budget",x.id)+'</div></div>').join('');
+ (isVisaBudget(x)?button(data.moves.some(m=>m.id==="budget-visa-"+x.id)?"تراجع عن سداد الفيزا":"تأكيد سداد الفيزا","confirmVisaPayment",x.id,"primary"):button(x.paid?'إلغاء متابعة البند':'تأكيد متابعة البند','toggleBudgetPaid',x.id,x.paid?'outline':'primary'))+actions("Budget",x.id)+'</div></div>').join('');
  return varianceBox+panel("بند الفائض الديناميكي",entryList([{title:"الفائض المخطط",value:money(Math.max(0,difference))},{title:"رصيد حساب الفائض / الطوارئ",value:money(data.accounts.find(a=>a.id==="emergency-reserve-v1")?accountBalance(data.accounts.find(a=>a.id==="emergency-reserve-v1")):0)}]),'<a href="surplus.html">إدارة الفائض وتوزيعه</a>')+incomeSourcesPanel(period)+metrics+stats([box("بنود مؤكدة",paidCount,"من "+items.length+" بندًا","blue"),box("قيمة بنود المتابعة",total(items.filter(x=>x.paid&&!isVisaBudget(x))),"ليست خصمًا بنكيًا","violet")])+
  panel("بنود ميزانية "+period,(items.length?'<div class="budget-list">'+budgetRows+"</div>":blank("لم تُنشأ ميزانية لهذا الشهر")),button("إضافة بند","newBudget",null,"primary")+button("نسخ بنود الشهر السابق","copyPrevBudget",null,"outline"))+
  '<p class="body-note">تأكيد سداد الفيزا يسجل حركة مالية؛ لا تكررها برسالة البنك.</p>'+
@@ -945,7 +945,7 @@ $("content").addEventListener("click",e=>{
  const target=e.target.closest("[data-action]");if(!target)return;
  const action=target.dataset.action;
  if(action==="saveAutoSalary"){data.autoSalary={day:Math.min(28,Math.max(1,Number($("autoPayDay").value)||27)),amount:Math.max(0,Number($("autoPayAmount").value)||0)};keep();return;}
- if(action==="confirmVisaPayment"){const x=data.budget.find(x=>x.id===target.dataset.id);const a=data.accounts.find(x=>x.legacyId==="ahli0105");const cards=data.debts.filter(x=>x.kind==="credit");if(!x||!a||!cards.length)return;const chosen=prompt("اختر رقم البطاقة: "+cards.map((v,i)=>(i+1)+" — "+v.name).join(" / "),"1");if(chosen===null)return;const card=cards[Number(chosen)-1];if(!card)return;const id="budget-visa-"+x.id;if(data.moves.some(m=>m.id===id)){alert("سبق تسجيل السداد");return}const amount=Math.min(num(x.amount),debtsBalance(card));if(!amount||!confirm("تأكيد سداد "+money(amount)+" من حساب الراتب إلى "+card.name+" دون تسجيل سابق؟"))return;data.moves.push({id,date:now(),budgetMonth:x.month,kind:"repayment",amount,principal:amount,from:a.id,debtId:card.id,category:x.name,source:"budget-visa",posted:true});keep();return;}
+ if(action==="confirmVisaPayment"){const x=data.budget.find(x=>x.id===target.dataset.id);const a=data.accounts.find(x=>x.legacyId==="ahli0105");const cards=data.debts.filter(x=>x.kind==="credit");if(!x||!a||!cards.length)return;const existing=data.moves.find(m=>m.id==="budget-visa-"+x.id);if(existing){if(confirm("إلغاء السداد المسجل وإعادة الرصيد للحساب والبطاقة؟")){data.moves=data.moves.filter(m=>m.id!==existing.id);keep()}return}const chosen=prompt("اختر رقم البطاقة: "+cards.map((v,i)=>(i+1)+" — "+v.name).join(" / "),"1");if(chosen===null)return;const card=cards[Number(chosen)-1];if(!card)return;const id="budget-visa-"+x.id;if(data.moves.some(m=>m.id===id)){if(confirm("إلغاء السداد المسجل وإعادة الرصيد للحساب والبطاقة؟")){data.moves=data.moves.filter(m=>m.id!==id);keep()}return}const amount=Math.min(num(x.amount),debtsBalance(card));if(!amount||!confirm("تأكيد سداد "+money(amount)+" من حساب الراتب إلى "+card.name+" دون تسجيل سابق؟"))return;data.moves.push({id,date:now(),budgetMonth:x.month,kind:"repayment",amount,principal:amount,from:a.id,debtId:card.id,category:x.name,source:"budget-visa",posted:true});keep();return;}
  const m={newAccount:"account",newBudget:"budget",newCommitment:"commitment",newDebt:"debt",newProject:"project",newInvestmentAccount:"account",newMove:"expense",newExpense:"expense",newTransfer:"transfer",newProfit:"profit"};
  if(action==="openSalaryCountdown"){page="salary";sub="countdown";render();return;}
  if(action==="saveSalaryCountdown"){
@@ -1008,7 +1008,7 @@ $("content").addEventListener("click",e=>{
  }
  if(action==="toggleBankFunding"){
   const g=bankGroups().find(x=>x.name===target.dataset.id);
-  if(g){const active=g.children.filter(a=>fundedItems(a).length);if(!active.length){alert("لا توجد بنود مرتبطة بحسابات هذا البنك للشهر المختار.");return}const confirmed=active.every(isAccountConfirmed),flags=bankConfirmations();active.forEach(a=>{if(!flags[a.id]?.ledgerId)confirmFundingLedger(a,flags)});keep();}
+  if(g){const active=g.children.filter(a=>fundedItems(a).length);if(!active.length){alert("لا توجد بنود مرتبطة بحسابات هذا البنك للشهر المختار.");return}const confirmed=active.every(isAccountConfirmed),flags=bankConfirmations();active.forEach(a=>{if(confirmed||!isAccountConfirmed(a))confirmFundingLedger(a,flags)});keep();}
   return;
  }
  if(action==="toggleCommitment"){
