@@ -502,3 +502,80 @@ test("policy scenario earmarks surplus without inventing actual transactions", (
   );
   assert.equal(d.moves.length, 0);
 });
+function grouped() {
+  const d = fixture();
+  d.budget[0] = {
+    id: "b",
+    month: "2026-12",
+    amount: 3500,
+    type: "debt",
+    name: "قروض",
+    bankAccountId: "bills",
+  };
+  d.debts.push({
+    id: "loan2",
+    kind: "loan",
+    opening: 200000,
+    monthlyPayment: 2500,
+    lastMonth: "2036-08",
+  });
+  return d;
+}
+function groupRequest() {
+  return {
+    itemId: "b",
+    from: "salary",
+    date: "2026-11-26",
+    operationKey: "batch",
+    payments: [
+      { id: "p1", debtId: "loan", amount: 1000, principal: "" },
+      { id: "p2", debtId: "loan2", amount: 2500, principal: "" },
+    ],
+  };
+}
+test("combined loan confirmation splits cash correctly and preserves unknown principal", () => {
+  const d = grouped(),
+    next = A.payLoanGroup(d, groupRequest());
+  assert.equal(A.balance(next, "salary"), 16500);
+  assert.equal(A.balance(next, "bills"), 0);
+  assert.equal(next.moves.length, 2);
+  assert.equal(A.debtBalance(next, "loan"), 100000);
+  assert.equal(A.debtBalance(next, "loan2"), 200000);
+  assert.equal(A.paymentStatus(next, next.budget[0]).paid, 3500);
+  assert.equal(next.budget[0].bankAccountId, "salary");
+  assert.equal(d.moves.length, 0);
+  assert.throws(() => A.payLoanGroup(next, groupRequest()));
+});
+test("loan group failures are atomic and reject credit cards", () => {
+  const d = grouped(),
+    r = groupRequest();
+  r.payments[1].amount = 3000;
+  assert.throws(() => A.payLoanGroup(d, r));
+  assert.equal(d.moves.length, 0);
+  r.payments[1].debtId = "card";
+  assert.throws(() => A.payLoanGroup(d, r));
+});
+test("loan group partial, independent linking and reversal leave other loan intact", () => {
+  let d = grouped();
+  A.post(d, {
+    id: "old",
+    kind: "repayment",
+    date: "2026-11-26",
+    budgetMonth: "2026-12",
+    amount: 1000,
+    principal: 0,
+    from: "salary",
+    debtId: "loan",
+    posted: true,
+  });
+  const r = groupRequest();
+  r.payments[0].existing = "old";
+  r.payments[1].amount = 500;
+  d = A.payLoanGroup(d, r);
+  assert.equal(d.moves.length, 2);
+  assert.equal(A.loanInstallments(d, d.budget[0])[1].due, 2000);
+  A.reverse(d, "p2");
+  assert.equal(A.loanInstallments(d, d.budget[0])[0].due, 0);
+  assert.equal(A.loanInstallments(d, d.budget[0])[1].due, 2500);
+  assert.equal(d.moves.find((x) => x.id === "old").posted, true);
+});

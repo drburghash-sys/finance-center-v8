@@ -506,6 +506,86 @@ document.getElementById("run").onclick = async () => {
       },
     );
     await check(
+      "combined loan dialog pays both installments from salary once",
+      async () => {
+        let d = state();
+        d.debts.push({
+          id: "batch-loan2",
+          kind: "loan",
+          name: "قرض ثان للاختبار",
+          opening: 50000,
+          monthlyPayment: 700,
+          lastMonth: "2036-08",
+        });
+        d.budget.push({
+          id: "batch-budget",
+          name: "قروض",
+          type: "debt",
+          financialCategory: "loan",
+          month: "2026-12",
+          amount: 1700,
+          bankAccountId: "bills",
+        });
+        await win().FinanceApp.save();
+        navigate("budget");
+        change("#monthNav", "2026-12");
+        const before = Accounting.balance(state(), "salary");
+        await click('[data-action="payBudgetV3"][data-id="batch-budget"]');
+        assert(
+          !doc().querySelector('.v3-modal [name="debtId"]'),
+          "single debt selector still shown",
+        );
+        assert(
+          doc().querySelector('.v3-modal [name="from"]').value === "salary",
+          "wrong default source",
+        );
+        assert(
+          doc().querySelector('.v3-modal [name="loan_amount_0"]').value ===
+            "1000",
+          "first installment incorrect",
+        );
+        assert(
+          doc().querySelector('.v3-modal [name="loan_amount_1"]').value ===
+            "700",
+          "second installment incorrect",
+        );
+        doc().querySelector('.v3-modal [name="confirmed"]').checked = true;
+        await click('.v3-modal [type="submit"]');
+        assert(
+          Accounting.balance(state(), "salary") === before - 1700,
+          "wrong combined debit",
+        );
+        assert(
+          state().moves.filter(
+            (x) => Accounting.active(x) && x.budgetItemId === "batch-budget",
+          ).length === 2,
+          "missing split ledger",
+        );
+        assert(
+          Accounting.debtBalance(state(), "loan") === 200000,
+          "unknown principal changed",
+        );
+        await click('[data-action="payBudgetV3"][data-id="batch-budget"]');
+        assert(
+          doc().querySelector('[name="loan_amount_0"]').value === "0" &&
+            doc().querySelector('[name="loan_amount_1"]').value === "0",
+          "settled installments offered again",
+        );
+        await click("[data-loan-undo]");
+        assert(
+          doc().querySelector('[name="loan_amount_0"]').value === "1000" &&
+            doc().querySelector('[name="loan_amount_1"]').value === "0",
+          "undo affected other loan",
+        );
+        doc().querySelector('.v3-modal [name="confirmed"]').checked = true;
+        await click('.v3-modal [type="submit"]');
+        assert(
+          Accounting.balance(state(), "salary") === before - 1700,
+          "reconfirmation repeated other loan",
+        );
+      },
+    );
+    await check(
       "competing browser contexts serialize and reject stale revision",
       async () => {
         const other = document.createElement("iframe");
