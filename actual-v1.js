@@ -296,6 +296,7 @@
   window.FinanceApp = {
     get: () => data,
     busy: () => saving,
+    bankGroup,
     save: keep,
     replace: async (d) => {
       data = await store.replaceLocked(d);
@@ -1109,13 +1110,11 @@
     return panel(
       "عمليات الديون المحفوظة من النسخة",
       entryList(
-        xs
-          .slice(0, 100)
-          .map((x) => ({
-            title: x.name + " • " + x.kind,
-            subtitle: x.date + " • محفوظة ضمن الرصيد المرجعي، لا تخصم مرة أخرى",
-            value: money(x.amount),
-          })),
+        xs.slice(0, 100).map((x) => ({
+          title: x.name + " • " + x.kind,
+          subtitle: x.date + " • محفوظة ضمن الرصيد المرجعي، لا تخصم مرة أخرى",
+          value: money(x.amount),
+        })),
         "لا توجد حركات",
       ),
     );
@@ -2161,21 +2160,18 @@
       panel(
         "الاستحقاقات المسجلة",
         entryList(
-          due
-            .slice(0, 25)
-            .map((x) => ({
-              title: x.name,
-              subtitle:
-                "استحقاق " + x.date + " • المدفوع فعليًا " + money(x.paid),
-              value: money(x.rest),
-              tag:
-                x.date < month()
-                  ? "متأخر"
-                  : x.date === month()
-                    ? "هذا الشهر"
-                    : "مخطط",
-              tagType: x.date < month() ? "warn" : "",
-            })),
+          due.slice(0, 25).map((x) => ({
+            title: x.name,
+            subtitle: "استحقاق " + x.date + " • المدفوع فعليًا " + money(x.paid),
+            value: money(x.rest),
+            tag:
+              x.date < month()
+                ? "متأخر"
+                : x.date === month()
+                  ? "هذا الشهر"
+                  : "مخطط",
+            tagType: x.date < month() ? "warn" : "",
+          })),
           "لا توجد استحقاقات مفتوحة",
         ),
         button("إضافة التزام", "newCommitment", null, "primary"),
@@ -2698,7 +2694,7 @@
     updateSmsVisibility();
     window.SalaryCountdown?.refresh(document, data.salaryCountdown);
     $("storageStatus").textContent =
-      "الإصدار ٣ • " +
+      "الإصدار ٣.٠.١ • " +
       data.moves.length +
       " حركة مسجلة • " +
       data.accounts.length +
@@ -2811,6 +2807,23 @@
           "expense",
         ) +
         select(
+          "دور البند في الخطة",
+          "financialCategory",
+          [
+            ["", "تحديد من الاسم والنوع"],
+            ["other", "مصروف عام"],
+            ["visa", "فيزا"],
+            ["loan", "قروض"],
+            ["reserve", "التزامات"],
+            ["invest", "استثمار"],
+            ["wife", "صندوق الزوجة"],
+            ["driver", "سائق"],
+            ["clothes", "ملابس"],
+            ["car", "سيارة"],
+          ],
+          "",
+        ) +
+        select(
           "البنك / الحساب المخصص لتنفيذ هذا البند",
           "bankAccountId",
           data.accounts
@@ -2818,7 +2831,8 @@
               (a) =>
                 a.role === "bank" ||
                 a.role === "reserve" ||
-                a.role === "investment",
+                a.role === "investment" ||
+                a.role === "cash",
             )
             .map((a) => [a.id, bankGroup(a) + " — " + a.name]),
           "",
@@ -3362,6 +3376,16 @@
         bankAccountId = v.bankAccountId || "";
       if (bankAccountId && !data.accounts.some((a) => a.id === bankAccountId))
         throw Error("اختر حسابًا موجودًا");
+      if (
+        old &&
+        old.type !== v.type &&
+        data.moves.some(
+          (m) => window.Accounting.active(m) && m.budgetItemId === old.id,
+        )
+      )
+        throw Error(
+          "للبند دفعات مسجلة؛ أضف بندًا مستقلًا للنوع الجديد للحفاظ على تاريخ الدفع",
+        );
       const changed =
         !!old &&
         (old.amount !== amount ||
@@ -3374,6 +3398,9 @@
         name: v.name.trim(),
         amount,
         type: v.type,
+        financialCategory:
+          v.financialCategory ||
+          window.Accounting.category({ name: v.name.trim(), type: v.type }),
         bankAccountId,
         paid: old ? (changed ? false : !!old.paid) : false,
       });
