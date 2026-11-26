@@ -287,6 +287,18 @@ function isAccountConfirmed(a){
  const v=bankConfirmations()[a.id];
  return fundedItems(a).length>0&&(v===true||!!(v&&typeof v==="object"&&v.signature===fundingSig(a)));
 }
+function confirmFundingLedger(a,flags){
+ const old=flags[a.id],source=data.accounts.find(x=>x.legacyId==="ahli0105")||data.accounts.find(x=>/نزول الراتب/.test(x.name||""));
+ if(isAccountConfirmed(a)&&old?.ledgerId){alert("التحويل مسجل ماليًا. لتصحيح تحويل فعلي استخدم مراجعة الحركات، وليس إلغاء التأكيد.");return}
+ const amount=fundedAmount(a);
+ if(!source){alert("حدد حساب نزول الراتب أولًا");return}
+ if(a.id===source.id||amount===0){flags[a.id]={signature:fundingSig(a),amount,confirmedAt:now()};return}
+ if(!confirm("هل تم تحويل "+money(amount)+" فعليًا من "+source.name+" إلى "+a.name+" ولم يُسجل سابقًا في الحركات؟"))return;
+ const duplicate=data.moves.find(m=>m.posted!==false&&m.kind==="transfer"&&m.from===source.id&&m.to===a.id&&Math.abs(num(m.amount)-amount)<.005&&m.date===now());
+ const id=duplicate?.id||uid();
+ if(!duplicate)data.moves.push({id,date:now(),kind:"transfer",amount,from:source.id,to:a.id,category:"تمويل ميزانية "+period,source:"budget-funding",posted:true,note:"تحويل مؤكد من المستخدم"});
+ flags[a.id]={signature:fundingSig(a),amount,confirmedAt:now(),ledgerId:id};
+}
 function bankGroups(){const names=[...new Set(data.accounts.map(bankGroup))];return names.map(name=>({name,children:data.accounts.filter(x=>bankGroup(x)===name)}))}
 function contentAccountFunding(){
  const groups=bankGroups();
@@ -977,12 +989,12 @@ $("content").addEventListener("click",e=>{
  }
  if(action==="toggleAccountFunding"){
   const x=acc(target.dataset.id);
-  if(x&&fundedItems(x).length){const flags=bankConfirmations();flags[x.id]=isAccountConfirmed(x)?false:{signature:fundingSig(x),amount:fundedAmount(x),confirmedAt:now()};keep();}
+  if(x&&fundedItems(x).length){const flags=bankConfirmations();confirmFundingLedger(x,flags);keep();}
   return;
  }
  if(action==="toggleBankFunding"){
   const g=bankGroups().find(x=>x.name===target.dataset.id);
-  if(g){const active=g.children.filter(a=>fundedItems(a).length);if(!active.length){alert("لا توجد بنود مرتبطة بحسابات هذا البنك للشهر المختار.");return}const confirmed=active.every(isAccountConfirmed),flags=bankConfirmations();active.forEach(a=>flags[a.id]=confirmed?false:{signature:fundingSig(a),amount:fundedAmount(a),confirmedAt:now()});keep();}
+  if(g){const active=g.children.filter(a=>fundedItems(a).length);if(!active.length){alert("لا توجد بنود مرتبطة بحسابات هذا البنك للشهر المختار.");return}const confirmed=active.every(isAccountConfirmed),flags=bankConfirmations();active.forEach(a=>{if(!flags[a.id]?.ledgerId)confirmFundingLedger(a,flags)});keep();}
   return;
  }
  if(action==="toggleCommitment"){
