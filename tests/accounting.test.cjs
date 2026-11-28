@@ -695,3 +695,28 @@ test("skip receiver supports grouped loans and selected visa without crediting r
   const prior=A.acknowledgePaid(d,{id:"pastloan",date:"2026-11-28",itemId:"loans",amount:1000});
   assert.equal(A.loanInstallments(prior,prior.budget[0])[0].due,0);
 });
+
+test("salary arrival deposit raises chosen account once and consumes startup assumption",()=>{
+  const original=fixture(),d=A.freshStart(original,"2026-12");
+  const r={id:"arrival",month:"2026-12",date:"2026-11-28",amount:10000,to:"salary",mode:"deposit"};
+  const n=A.confirmSalary(d,r);
+  assert.equal(A.balance(n,"salary"),10000);assert.equal(A.balance(n,"bills"),0);
+  assert.equal(A.salaryStatus(n,"2026-12").confirmed,true);assert.equal(n.openingSalary,undefined);
+  assert.throws(()=>A.confirmSalary(n,{...r,id:"again"}));
+  assert.throws(()=>A.post(n,move("smsagain","income",10000,{to:"salary",budgetMonth:"2026-12",category:"راتب"})));
+  assert.equal(C.simulate(n,{start:"2026-12",months:1}).rows[0].cash,9000);
+  assert.equal(A.balance(d,"salary"),0);
+  A.reverse(n,"arrival");assert.equal(A.salaryStatus(n,"2026-12").confirmed,false);
+  const rerecorded=A.confirmSalary(n,{...r,id:"rereceived"});assert.equal(A.balance(rerecorded,"salary"),10000);
+});
+
+test("salary included acknowledgement leaves balance intact and prevents a future duplicate",()=>{
+  const d=fixture();const r={id:"proof",month:"2026-12",date:"2026-11-28",amount:10000,to:"salary",mode:"included"};
+  const n=A.confirmSalary(d,r);assert.equal(A.balance(n,"salary"),20000);assert.equal(n.moves.length,0);
+  assert.equal(C.simulate(n,{start:"2026-12",months:1}).rows[0].cash,19000);
+  assert.throws(()=>A.confirmSalary(n,{...r,mode:"deposit"}));
+  assert.throws(()=>A.confirmSalary(d,{...r,to:"missing"}));
+  assert.throws(()=>A.confirmSalary(d,{...r,date:"2026-02-30"}));
+  A.post(d,move("existing","income",10000,{to:"salary",budgetMonth:"2026-12",category:"راتب"}));
+  assert.throws(()=>A.confirmSalary(d,r));
+});

@@ -93,6 +93,8 @@
       throw Error("راتب الشهر مثبت ضمن نقطة البداية");
     if (m.kind === "income" && (m.category === "راتب" || ["scheduled-salary","salary-v3"].includes(m.source)) && d.openingSalary?.month === m.budgetMonth && d.openingSalary.amount > 0)
       throw Error("راتب شهر البداية مشمول في الأرصدة التي ستدخلها؛ لا تضفه ثانية");
+    if (m.kind==="income" && (m.category==="راتب" || ["scheduled-salary","salary-v3"].includes(m.source)) && d.salaryReceipts?.[m.budgetMonth] && salaryStatus(d,m.budgetMonth).receipt && d.salaryReceipts[m.budgetMonth].moveId!==m.id)
+      throw Error("وصول الراتب مثبت؛ لا تضفه ثانية");
     const account = (id) => d.accounts.some((a) => a.id === id),
       debt = d.debts.find((x) => x.id === m.debtId);
     if (
@@ -193,6 +195,9 @@
     for (const b of d.budget) {
       if (val(b.amount) < 0 || !Number.isFinite(idx(b.month)))
         throw Error("بند ميزانية غير صالح");
+    }
+    for(const [month,r] of Object.entries(d.salaryReceipts || {})) {
+      if(!Number.isFinite(idx(month)) || val(r.amount)<=0 || !d.accounts.some(a=>a.id===r.to) || !["deposit","included"].includes(r.mode) || (r.mode==="deposit" && !d.moves.some(m=>m.id===r.moveId))) throw Error("إثبات وصول راتب غير صالح");
     }
     const priorIds=new Set();
     for(const x of d.priorPayments || []) {
@@ -793,7 +798,36 @@
     audit(d,"external-funding",{accountId:request.accountId,amount:total,message:"دفع مباشر؛ خصم من المصدر دون إضافة للمستلم"});
     return d;
   }
+  function salaryStatus(d, month) {
+    const moves=d.moves.filter(m=>active(m) && m.kind==="income" && (m.budgetMonth || m.date.slice(0,7))===month && (m.category==="راتب" || ["scheduled-salary","salary-v3"].includes(m.source)));
+    const receipt=d.salaryReceipts?.[month], validReceipt=receipt && (receipt.mode==="included" || d.moves.some(m=>m.id===receipt.moveId && active(m)));
+    return {confirmed:moves.length>0 || !!validReceipt,moves,receipt:validReceipt?receipt:null};
+  }
+  function confirmSalary(input, r) {
+    const d=clone(input);
+    if (!Number.isFinite(idx(r.month)) || !/^\d{4}-\d{2}-\d{2}$/.test(r.date || "") || new Date(r.date+"T12:00:00Z").toISOString().slice(0,10)!==r.date || r.date>today()) throw Error("راجع تاريخ الوصول وشهر الميزانية");
+    const amount=sar(cents(r.amount)), account=d.accounts.find(a=>a.id===r.to && a.role==="bank");
+    if(amount<=0 || !account) throw Error("حدد حساب الراتب البنكي والمبلغ الصحيح");
+    if(salaryStatus(d,r.month).confirmed) throw Error("وصول راتب هذا الشهر مثبت بالفعل؛ لن يُضاف مرة أخرى");
+    if(!["deposit","included"].includes(r.mode)) throw Error("حدد أثر الإثبات على الرصيد");
+    if(r.mode==="deposit") {
+      if(d.settledStarts?.[r.month]?.salaryReceived>0) throw Error("راتب الشهر مثبت ضمن التهيئة؛ استخدم الإثبات دون إضافة");
+      if(d.moves.some(m=>active(m)&&m.kind==="income"&&m.to===r.to&&m.date===r.date&&val(m.amount)===val(amount))) throw Error("توجد حركة دخل مطابقة؛ راجع السجل واربطها بدل تكرارها");
+      if(d.openingSalary?.month===r.month) {
+        audit(d,"opening-salary-reclassified",{before:d.openingSalary,message:"المستخدم اختار إيداعًا يضاف للرصيد بعد مراجعة الحساب"});
+        delete d.openingSalary;
+      }
+      post(d,{id:r.id,operationKey:"salary:"+r.month,kind:"income",date:r.date,budgetMonth:r.month,amount,to:r.to,category:"راتب",source:"salary-v3",evidence:"user-confirmed",posted:true});
+    }
+    if(r.mode==="included" && d.openingSalary?.month===r.month) d.openingSalary.amount=amount;
+    d.salaryReceipts ??= {};
+    d.salaryReceipts[r.month]={month:r.month,date:r.date,amount,to:r.to,mode:r.mode,moveId:r.mode==="deposit"?r.id:null,at:stamp()};
+    d.settings ??= {};d.settings.salaryAccountId=r.to;
+    audit(d,"salary-received",{after:d.salaryReceipts[r.month]});
+    return d;
+  }
   g.Accounting = {
+    confirmSalary, salaryStatus,
     freshStart, acknowledgePaid, externalFunding,
     settledStart,
     KEY,

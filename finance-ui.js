@@ -604,72 +604,28 @@
     );
   }
   function salary() {
-    const app = g.FinanceApp,
-      d = app.get(),
-      month = app.period(),
-      existing = d.moves.filter(
-        (m) =>
-          A.active(m) &&
-          m.kind === "income" &&
-          (m.category === "راتب" ||
-            m.source === "scheduled-salary" ||
-            m.source === "salary-v3"),
-      );
-    dialog(
-      "إيداع راتب مثبت",
-      field("month", "شهر الميزانية", month, "month", "required") +
-        field("date", "تاريخ الإيداع", A.today(), "date", "required") +
-        field(
-          "amount",
-          "المبلغ",
-          C.income(d, month).salary,
-          "number",
-          'step="0.01" min="0.01" required',
-        ) +
-        select(
-          "to",
-          "الحساب المستلم",
-          accounts(d),
-          d.settings.salaryAccountId,
-        ) +
-        "<p>الإيداعات الموجودة: " +
-        existing
-          .map(
-            (m) =>
-              esc(m.date) + " / " + esc(m.budgetMonth) + " " + money(m.amount),
-          )
-          .join("، ") +
-        '</p><label><input type="checkbox" required name="confirmed"> تأكدت من إيداع البنك وعدم تسجيله سابقًا</label>',
-      (v) => {
-        if (d.settledStarts?.[v.month]?.salaryReceived > 0) throw Error("الراتب مثبت ضمن نقطة البداية؛ لا تسجله مرة أخرى");
-        if (
-          existing.some(
-            (m) =>
-              m.budgetMonth === v.month ||
-              (m.date === v.date &&
-                m.to === v.to &&
-                m.amount === Number(v.amount)),
-          )
-        )
-          throw Error(
-            "راتب هذا الشهر موجود؛ اربط رسالة البنك بالحركة بدل تكراره",
-          );
-        A.post(d, {
-          id: id(),
-          operationKey: "salary:" + v.month,
-          kind: "income",
-          date: v.date,
-          budgetMonth: v.month,
-          amount: Number(v.amount),
-          to: v.to,
-          category: "راتب",
-          source: "salary-v3",
-          evidence: "user-confirmed",
-          posted: true,
-        });
-        return app.save();
-      },
-    );
+    const app=g.FinanceApp, d=app.get(), current=A.today().slice(0,7),
+      month=app.period()===current && Number(A.today().slice(8))>=27 ? C.ym(C.idx(current)+1) : app.period();
+    const status=A.salaryStatus(d,month), amount=C.income(d,month).salary,
+      salaryAccount=d.accounts.find(a=>a.id===d.settings.salaryAccountId) || d.accounts.find(a=>a.role==="bank"),
+      defaultMode=!status.confirmed && salaryAccount && A.balance(d,salaryAccount)===0 ? "deposit" : "included";
+    dialog("إثبات وصول الراتب إلى حساب الراتب",
+      '<p>راتب يوم ٢٧ مخصص لميزانية الشهر التالي. تاريخ الوصول مستقل عن شهر الميزانية.</p>'+
+      field("month","شهر الميزانية",month,"month","required")+
+      field("date","تاريخ وصول الراتب",A.today(),"date","required")+
+      field("amount","مبلغ الراتب المستلم",amount,"number",'min="0.01" step="0.01" required')+
+      select("to","حساب الراتب المستلم",d.accounts.filter(a=>a.role==="bank").map(a=>[a.id,a.name+" — الرصيد الحالي "+money(A.balance(d,a))]),d.settings.salaryAccountId)+
+      select("mode","أثر إثبات الوصول",[["included","إثبات فقط — الراتب مشمول في الرصيد الحالي"],["deposit","إيداع فعلي — أضف مبلغ الراتب إلى الرصيد"]],defaultMode)+
+      '<p id="salary-impact"></p><p id="salary-existing">'+(status.confirmed?"وصول راتب هذا الشهر مثبت بالفعل؛ لن يتكرر.":"لم يتم إثبات وصول الراتب لهذا الشهر من هذا الزر.")+ '</p>'+
+      '<label><input type="checkbox" required> تحققت من وصول الراتب واخترت أثره الصحيح على رصيد الحساب.</label>',
+      async v=>{const saved=await app.saveState(A.confirmSalary(d,{...v,id:id()}));if(saved) app.navigate("accounts","balances",v.month);return saved;});
+    const form=host.querySelector("form");
+    const update=()=>{
+      const v=Object.fromEntries(new FormData(form)), a=d.accounts.find(x=>x.id===v.to), before=a?A.balance(d,a):0, adding=v.mode==="deposit";
+      host.querySelector("#salary-impact").textContent=(adding?"سيزيد الرصيد: ":"سيبقى الرصيد: ")+money(before)+ (adding?" ← "+money(before+(Number(v.amount)||0)):" دون أي إضافة") + (adding && d.openingSalary?.month===v.month?". راجع أنك لم تدخل الرصيد بعد نزول الراتب؛ هذا الخيار يلغي افتراض تضمينه في أرصدة البداية.":"");
+      host.querySelector("#salary-existing").textContent=A.salaryStatus(d,v.month).confirmed?"وصول راتب هذا الشهر مثبت بالفعل؛ لن يتكرر.":"راجع المبلغ والتاريخ قبل الاعتماد.";
+    };
+    form.addEventListener("input",update);form.addEventListener("change",update);update();
   }
   function planning() {
     const app = g.FinanceApp,
