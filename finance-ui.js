@@ -78,6 +78,28 @@
   }
   const accounts = (d) =>
     d.accounts.map((a) => [a.id, a.name + " — " + money(A.balance(d, a))]);
+  function settledStart() {
+    const app = g.FinanceApp, d = app.get(), month = app.period();
+    if (d.settledStarts?.[month]) throw Error("تهيئة هذا الشهر معتمدة بالفعل");
+    dialog("تهيئة بعد التوزيع والسداد",
+      "<p>أدخل الأرصدة الحالية بعد التنفيذ. لا تُنشأ إيداعات أو خصومات جديدة. البنود المحددة ستثبت كمسددة عند نقطة البداية، والشهر يبقى مفتوحًا. صدّر نسخة احتياطية قبل الاعتماد.</p>" +
+      field("month", "شهر الميزانية", month, "month", "required") +
+      field("date", "تاريخ مطابقة الأرصدة", A.today(), "date", "required") +
+      field("salaryReceived", "راتب هذا الشهر المستلم والمشمول في الأرصدة", C.income(d,month).salary, "number", 'min="0" step="0.01" required') +
+      d.accounts.map(a => field("account_"+a.id, a.name+" • "+(a.last4||a.bank||""), A.balance(d,a), "number", 'min="0" step="0.01" required')).join("") +
+      d.debts.map(a => field("debt_"+a.id, "المتبقي: "+a.name, A.debtBalance(d,a), "number", 'min="0" step="0.01" required') +
+        (a.kind === "loan" && a.monthlyPayment != null ? field("installment_"+a.id,"القسط الشهري: "+a.name,a.monthlyPayment,"number",'min="0" step="0.01" required') : "")).join("") +
+      d.budget.filter(b=>b.month===month).map(b=>'<label><input type="checkbox" name="paid_'+esc(b.id)+'" checked> '+esc(b.name)+' — '+money(b.amount)+' سُدد بالفعل</label>').join("") +
+      '<label><input type="checkbox" name="confirmed" required> راجعت الأرصدة والبنود المختارة، وجميعها بعد التنفيذ الفعلي.</label>',
+      v => {
+        if (v.month !== month) throw Error("اختر شهر الميزانية من الصفحة ثم افتح التهيئة مجددًا");
+        const r = {month:v.month,date:v.date,salaryReceived:v.salaryReceived,accounts:{},debts:{},installments:{},paidItems:[]};
+        for (const a of d.accounts) r.accounts[a.id]=v["account_"+a.id];
+        for (const a of d.debts) {r.debts[a.id]=v["debt_"+a.id];r.installments[a.id]=v["installment_"+a.id];}
+        for (const b of d.budget.filter(b=>b.month===month)) if(v["paid_"+b.id]) r.paidItems.push(b.id);
+        return app.saveState(A.settledStart(d,r));
+      });
+  }
   function candidates(d, b) {
     return d.moves.filter(
       (m) =>
@@ -313,6 +335,7 @@
           )
         : "") +
       '<label><input name="confirmed" type="checkbox" required> أؤكد حدوث العملية وأني راجعت الحركات السابقة.</label>';
+    if (status.complete && d.settledStarts?.[b.month]?.items?.[b.id]) throw Error("البند مسدد ضمن نقطة البداية؛ لا يحتاج خصمًا جديدًا");
     const operationKey = id();
     dialog("دفع البند: " + b.name, body, (v) => {
       if (v.existing) {
@@ -397,7 +420,7 @@
         links = (d.fundingLinks || []).filter(
           (x) => x.month === month && x.accountId === aid && !x.unlinked,
         ),
-        actual = links.reduce(
+        actual = (d.settledStarts?.[month]?.funding?.[aid] || 0) + links.reduce(
           (s, l) =>
             s +
             (d.moves.find((m) => m.id === l.moveId && A.active(m))?.amount ||
@@ -470,6 +493,7 @@
         for (const aid of accountIds) {
           const mode = v["mode_" + aid];
           if (mode === "skip") continue;
+          if (staged.settledStarts?.[month]) throw Error("التوزيع مثبت ضمن نقطة البداية؛ سجل التحويل الإضافي من الحركات");
           let m;
           if (mode === "new") {
             m = {
@@ -573,6 +597,7 @@
           .join("، ") +
         '</p><label><input type="checkbox" required name="confirmed"> تأكدت من إيداع البنك وعدم تسجيله سابقًا</label>',
       (v) => {
+        if (d.settledStarts?.[v.month]?.salaryReceived > 0) throw Error("الراتب مثبت ضمن نقطة البداية؛ لا تسجله مرة أخرى");
         if (
           existing.some(
             (m) =>
@@ -803,6 +828,7 @@
           "recordSalary",
           "saveAutoSalary",
           "planningSettings",
+          "settledStart",
         ].includes(action)
       )
         return;
@@ -810,7 +836,8 @@
       e.stopImmediatePropagation();
       try {
         const d = g.FinanceApp.get();
-        if (action === "planningSettings") planning();
+        if (action === "settledStart") settledStart();
+        else if (action === "planningSettings") planning();
         else if (
           ["payBudgetV3", "confirmVisaPayment", "toggleBudgetPaid"].includes(
             action,
@@ -841,5 +868,5 @@
     },
     true,
   );
-  g.FinanceUI = { pay, funding, salary, review };
+  g.FinanceUI = { pay, funding, salary, review, settledStart };
 })(window);
