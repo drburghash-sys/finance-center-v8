@@ -2697,7 +2697,7 @@
     updateSmsVisibility();
     window.SalaryCountdown?.refresh(document, data.salaryCountdown);
     $("storageStatus").textContent =
-      "الإصدار ٣.٠.٢ • " +
+      "الإصدار ٣.٠.٣ • " +
       data.moves.length +
       " حركة مسجلة • " +
       data.accounts.length +
