@@ -243,6 +243,7 @@
     ];
     return (
       refs
+        .filter((r) => typeof r === "string" && r.trim() !== "")
         .map((r) => d.accounts.find((a) => a.id === r || a.legacyId === r))
         .find(Boolean) || null
     );
@@ -913,7 +914,34 @@
     validate(d);
     return d;
   }
+  function accountLabel(d, accountId) {
+    const a=d.accounts.find(x=>x.id===accountId);
+    return a ? [a.bank,a.name,a.last4?"•••• "+a.last4:""].filter(Boolean).join(" — ") : "غير محدد";
+  }
+  function paymentSource(d,b) {
+    const prior=(d.priorPayments||[]).filter(p=>p.itemId===b.id&&!p.reversed).map(p=>p.from).reverse();
+    const moves=d.moves.filter(m=>active(m)&&m.budgetItemId===b.id).map(m=>m.from).reverse();
+    return [b.paymentSourceId,...prior,...moves,accountFor(d,b)?.id].map(id=>d.accounts.find(a=>a.id===id)).find(Boolean)||null;
+  }
+  function correctPaymentSource(input,r) {
+    const d=clone(input),b=d.budget.find(x=>x.id===r.itemId);
+    if(!b || !d.accounts.some(a=>a.id===r.from)) throw Error("اختر حساب المصدر الصحيح");
+    const before=b.paymentSourceId||null;
+    b.paymentSourceId=r.from;
+    if(!accountFor(d,b) && !["saving","investment"].includes(b.type)) b.bankAccountId=r.from;
+    audit(d,"correct-payment-source",{itemId:b.id,before,after:r.from,message:"تصحيح الربط فقط؛ الحركات والأرصدة دون تغيير"});
+    return d;
+  }
+  function correctFundingSource(input,r) {
+    const d=clone(input);
+    if(!Number.isFinite(idx(r.month)) || !d.accounts.some(a=>a.id===r.accountId) || !d.accounts.some(a=>a.id===r.from))throw Error("اختر الحساب والمصدر الصحيحين");
+    const before=d.fundingSources?.[r.month]?.[r.accountId]||null;
+    d.fundingSources ??= {};d.fundingSources[r.month] ??= {};d.fundingSources[r.month][r.accountId]=r.from;
+    audit(d,"correct-funding-source",{accountId:r.accountId,month:r.month,before,after:r.from,message:"تصحيح وصف المسار دون تنفيذ تحويل"});
+    return d;
+  }
   g.Accounting = {
+    accountLabel, paymentSource, correctPaymentSource, correctFundingSource,
     confirmBudgetPayment,
     fundingStatus, confirmFunding,
     confirmSalary, salaryStatus,

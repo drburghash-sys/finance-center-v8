@@ -1386,6 +1386,7 @@
               ? "✓ تم تأكيد تنفيذ البند في الميزانية"
               : "لم يتم تأكيد البند في الميزانية") +
           "</span>" +
+          '<p class="hint">مصدر التحويل: ' + esc(window.Accounting.accountLabel(data,data.fundingSources?.[period]?.[account.id] || data.settings.salaryAccountId)) + ' • حساب الاستلام: ' + esc(window.Accounting.accountLabel(data,account.id)) + '</p>' +
           '<div class="hint">المطلوب تحويله لهذا الحساب: <b>' +
           money(fundedAmount(account)) +
           "</b></div>" +
@@ -1699,7 +1700,7 @@
           "</b><small>" +
           esc(x.category || x.type) +
           "</small><small>حساب التنفيذ: " +
-          esc(acc(x.paymentSourceId)?.name || linkedAccount(x)?.name || "غير محدد") +
+          esc(window.Accounting.paymentSource(data,x)?.name || "غير محدد") +
           "</small><strong>" +
           money(x.amount) +
           "</strong><small>المثبت: " +
@@ -2702,7 +2703,7 @@
     updateSmsVisibility();
     window.SalaryCountdown?.refresh(document, data.salaryCountdown);
     $("storageStatus").textContent =
-      "الإصدار ٣.٠.٨ • " +
+      "الإصدار ٣.٠.٩ • " +
       data.moves.length +
       " حركة مسجلة • " +
       data.accounts.length +

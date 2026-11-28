@@ -811,3 +811,42 @@ test("simple payment links an existing debit instead of charging again and suppo
   const n=A.confirmBudgetPayment(d,r);assert.equal(n.moves.length,1);assert.equal(A.balance(n,"salary"),19600);
   assert.equal(A.paymentStatus(n,n.budget[0]).rest,600);
 });
+
+test("empty account references never resolve to emergency or other accounts without legacy IDs",()=>{
+  const d=fixture();d.accounts.find(a=>a.id==="salary").legacyId="s";d.accounts.find(a=>a.id==="bills").legacyId="t";
+  assert.equal(A.accountFor(d,{linkedBankId:"t"}).id,"bills");
+  assert.equal(A.accountFor(d,{bankAccountId:undefined,linkedBankId:"bills"}).id,"bills");
+  assert.equal(A.accountFor(d,{bankAccountId:"",linkedBankId:null}),null);
+  assert.equal(A.accountFor(d,{bankAccountId:"   ",linkedBankId:"bills"}).id,"bills");
+  assert.equal(A.accountFor(d,{}),null);
+});
+
+test("correcting paid item source changes metadata without replaying or rewriting payments",()=>{
+  const d=fixture();A.post(d,move("sourcepay","expense",1000,{from:"salary",budgetMonth:"2026-12",budgetItemId:"b"}));
+  const n=A.correctPaymentSource(d,{itemId:"b",from:"bills"});
+  assert.deepEqual(n.moves,d.moves);
+  assert.equal(A.balance(n,"salary"),19000);assert.equal(A.balance(n,"bills"),0);
+  assert.equal(A.paymentStatus(n,n.budget[0]).complete,true);
+  assert.equal(A.paymentSource(n,n.budget[0]).id,"bills");
+  assert.equal(d.budget[0].paymentSourceId,undefined);
+  assert.throws(()=>A.correctPaymentSource(d,{itemId:"b",from:"missing"}));
+});
+
+test("payment source display and correction work for prior-paid records and unlinked items",()=>{
+  const d=A.acknowledgePaid(fixture(),{id:"proofsource",itemId:"b",from:"salary",amount:1000,date:"2026-11-28"});
+  assert.equal(A.paymentSource(d,d.budget[0]).id,"salary");
+  const n=A.correctPaymentSource(d,{itemId:"b",from:"bills"});
+  assert.deepEqual(n.priorPayments,d.priorPayments);assert.equal(n.moves.length,0);
+  assert.equal(A.paymentStatus(n,n.budget[0]).complete,true);
+  const bare=fixture();delete bare.budget[0].bankAccountId;
+  const fixed=A.correctPaymentSource(bare,{itemId:"b",from:"salary"});
+  assert.equal(A.accountFor(fixed,fixed.budget[0]).id,"salary");
+});
+
+test("correcting bank transfer route never changes funding completion or cash",()=>{
+  const d=A.confirmFunding(fixture(),{id:"paidaccount",month:"2026-12",accountId:"bills",mode:"prior"});
+  const n=A.correctFundingSource(d,{month:"2026-12",accountId:"bills",from:"reserve"});
+  assert.equal(n.fundingSources["2026-12"].bills,"reserve");
+  assert.deepEqual(A.fundingStatus(n,"2026-12","bills"),A.fundingStatus(d,"2026-12","bills"));
+  assert.deepEqual(n.moves,d.moves);for(const a of d.accounts)assert.equal(A.balance(n,a.id),A.balance(d,a.id));
+});
