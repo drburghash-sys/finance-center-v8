@@ -690,6 +690,7 @@ test("skip receiver supports grouped loans and selected visa without crediting r
   const n=A.externalFunding(d,{id:"debtbatch",month:"2026-12",date:"2026-11-28",accountId:"bills",from:"salary",payments:[{itemId:"loans"},{itemId:"visa",debtId:"card"}]});
   assert.equal(A.balance(n,"salary"),18500);assert.equal(A.balance(n,"bills"),0);
   assert.equal(A.debtBalance(n,"loan"),100000);assert.equal(A.debtBalance(n,"card"),6500);
+  assert.equal(A.accountFor(n,n.budget[0]).id,"bills");
   assert.equal(A.paymentStatus(n,n.budget[0]).rest,0);assert.equal(A.paymentStatus(n,n.budget[1]).rest,0);
   const prior=A.acknowledgePaid(d,{id:"pastloan",date:"2026-11-28",itemId:"loans",amount:1000});
   assert.equal(A.loanInstallments(prior,prior.budget[0])[0].due,0);

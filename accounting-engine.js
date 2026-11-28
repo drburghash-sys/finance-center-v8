@@ -767,9 +767,11 @@
       if (!b) throw Error("راجع ربط البند بالحساب والشهر");
       if (["saving","investment"].includes(b.type)) throw Error("الادخار والاستثمار يحتاجان تحويلًا حقيقيًا أو إثباتًا سابقًا دون خصم");
       if (category(b)==="loan" && loanInstallments(d,b).length) {
-        const rows=loanInstallments(d,b);
+        const rows=loanInstallments(d,b), originalBank=b.bankAccountId;
         d=payLoanGroup(d,{itemId:b.id,from:request.from,date:request.date,operationKey:request.id+":"+b.id,
           payments:rows.filter(r=>r.due>0).map(r=>({id:request.id+":"+b.id+":"+r.loan.id,debtId:r.loan.id,amount:r.due,principal:""}))});
+        const plannedItem=d.budget.find(x=>x.id===b.id);
+        if(originalBank == null) delete plannedItem.bankAccountId; else plannedItem.bankAccountId=originalBank;
       } else {
         const amount=paymentStatus(d,b).rest;
         if (!amount) continue;
