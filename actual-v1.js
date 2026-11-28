@@ -298,6 +298,7 @@
     busy: () => saving,
     bankGroup,
     save: keep,
+    saveState: async (next) => { data = next; return keep(); },
     replace: async (d) => {
       data = await store.replaceLocked(d);
       render();
@@ -1267,7 +1268,7 @@
           )?.amount || 0),
         0,
       );
-    return fundedAmount(a) > 0 && actual >= fundedAmount(a);
+    return fundedAmount(a) > 0 && actual + (data.settledStarts?.[period]?.funding?.[a.id] || 0) >= fundedAmount(a);
   }
   function bankGroups() {
     const names = [...new Set(data.accounts.map(bankGroup))];
@@ -2626,6 +2627,7 @@
       "ملفاتك والنسخ الاحتياطية",
       '<p class="body-note">يدعم هذا القسم استيراد النسخة الشاملة New_Finance_Full دفعة واحدة: جميع الحسابات وأرصدة الفيزا ودراهم، الحركات السابقة، أشهر الميزانية، سجل الديون، أهداف المدارس والسيارة والمشاريع، وحاسبة الراتب. الأرصدة تبدأ من تاريخ النسخة ولا يُعاد خصم أي حركة تاريخية منها. لا تُرفع الملفات إلى GitHub.</p><div class="buttons">' +
         button("تصدير جميع بيانات هذا المركز", "export", null, "primary") +
+        button("تهيئة بعد التوزيع والسداد", "settledStart", null, "outline") +
         button(
           "استيراد V8 المحفوظ على هذا الجهاز",
           "importLocalV8",
@@ -2690,7 +2692,8 @@
                           : page === "charts"
                             ? contentChart()
                             : contentData();
-    $("content").innerHTML = html;
+    const start = data.settledStarts?.[period];
+    $("content").innerHTML = (start ? '<section class="panel"><p>شهر ' + esc(period) + ' معتمد التوزيع ومفتوح للصرف. أرصدة البداية مطابقة بتاريخ ' + esc(start.date) + '؛ البنود المثبتة سُددت سابقًا دون خصم جديد.</p></section>' : "") + html;
     updateSmsVisibility();
     window.SalaryCountdown?.refresh(document, data.salaryCountdown);
     $("storageStatus").textContent =

@@ -59,6 +59,7 @@
     if (!a) throw Error("الدين غير موجود");
     return sar(
       val(a.opening) +
+        val(a.snapshotAdjustment) +
         d.moves
           .filter((m) => active(m) && m.debtId === a.id)
           .reduce((s, m) => s + debtDelta(m), 0),
@@ -88,6 +89,8 @@
       throw Error("تاريخ الحركة غير صالح");
     if (m.budgetMonth && !Number.isFinite(idx(m.budgetMonth)))
       throw Error("شهر الميزانية غير صالح");
+    if (m.kind === "income" && (m.category === "راتب" || ["scheduled-salary", "salary-v3"].includes(m.source)) && d.settledStarts?.[m.budgetMonth]?.salaryReceived > 0 && !d.settledStarts[m.budgetMonth].existingMoveIds.includes(m.id))
+      throw Error("راتب الشهر مثبت ضمن نقطة البداية");
     const account = (id) => d.accounts.some((a) => a.id === id),
       debt = d.debts.find((x) => x.id === m.debtId);
     if (
@@ -179,6 +182,7 @@
     for (const a of [...d.accounts, ...d.debts]) {
       val(a.opening);
       val(a.balanceAdjustment);
+      val(a.snapshotAdjustment);
     }
     for (const m of d.moves) {
       val(m.amount);
@@ -187,6 +191,14 @@
     for (const b of d.budget) {
       if (val(b.amount) < 0 || !Number.isFinite(idx(b.month)))
         throw Error("بند ميزانية غير صالح");
+    }
+    for (const [month, snap] of Object.entries(d.settledStarts || {})) {
+      if (!Number.isFinite(idx(month)) || !Array.isArray(snap.existingMoveIds) || val(snap.salaryReceived) < 0)
+        throw Error("تهيئة شهر غير صالحة");
+      for (const [id, record] of Object.entries(snap.items || {})) {
+        if (!d.budget.some(b => b.id === id && b.month === month) || val(record.paid) < 0)
+          throw Error("بند نقطة البداية غير صالح؛ احتفظ به للتدقيق");
+      }
     }
     return true;
   }
@@ -224,7 +236,7 @@
   }
   function paymentStatus(d, b) {
     const ms = d.moves.filter((m) => active(m) && m.budgetItemId === b.id),
-      paid = sum(ms, (m) => (m.kind === "repayment" ? m.amount : m.amount)),
+      paid = sar(val(sum(ms, (m) => m.amount)) + val(d.settledStarts?.[b.month]?.items?.[b.id]?.paid)),
       rest = Math.max(0, sar(val(b.amount) - val(paid)));
     return {
       paid,
@@ -246,6 +258,11 @@
   }
   function post(d, m) {
     validateMove(d, m);
+    if (m.budgetItemId && d.settledStarts?.[m.budgetMonth]?.items?.[m.budgetItemId]) {
+      const b = d.budget.find(x => x.id === m.budgetItemId);
+      if (val(m.amount) > val(paymentStatus(d, b).rest))
+        throw Error("البند مثبت ضمن نقطة البداية؛ لا تسجل سداده مرة أخرى");
+    }
     const same = d.moves.find(
       (x) =>
         x.id === m.id ||
@@ -361,33 +378,10 @@
           m.id === "budget-visa-" + visa.id &&
           m.source === "budget-visa",
       );
-    if (repayment) {
-      if (
-        repayment.date === "2026-11-26" &&
-        repayment.budgetMonth === "2026-12" &&
-        repayment.amount > 0 &&
-        repayment.amount <= 5000 &&
-        repayment.principal === repayment.amount &&
-        visa.amount === 5000
-      ) {
-        if (repayment.amount < 5000) {
-          audit(d, "approved-handover-correction", {
-            moveId: repayment.id,
-            before: repayment,
-            after: { amount: 5000, principal: 5000 },
-            reason: "دفعة المستخدم المؤكدة في وثيقة التسليم",
-          });
-          repayment.amount = 5000;
-          repayment.principal = 5000;
-        }
-        repayment.budgetItemId = visa.id;
-        repayment.evidence = "user-confirmed-handover";
-      } else
-        issue("visa-payment", {
-          moveId: repayment.id,
-          message: "المبلغ يختلف عن وثيقة التسليم؛ لم يتم تغييره",
-        });
-    }
+    if (repayment) issue("visa-payment", {
+      moveId: repayment.id,
+      message: "دفعة فيزا قديمة؛ تُراجع مع البنك دون تعديل مبلغها تلقائيًا",
+    });
     for (const m of d.moves.filter(active)) {
       if (m.source === "scheduled-salary") {
         m.evidence ??= "assumed-legacy";
@@ -485,6 +479,13 @@
           after: next[k] ?? null,
         });
     }
+    for (const [month, snap] of Object.entries(next.settledStarts || {}))
+      for (const itemId of Object.keys(snap.items || {})) {
+        const b = next.budget.find(x => x.id === itemId);
+        const added = next.moves.some(m => active(m) && m.budgetItemId === itemId && !before.moves.some(old => old.id === m.id));
+        if (added && b && val(paymentStatus(next,b).paid) > val(b.amount))
+          throw Error("السداد الجديد يتجاوز المتبقي بعد نقطة البداية");
+      }
     validate(next);
     return next;
   }
@@ -552,6 +553,9 @@
         const candidate = reconcileChanges(state, migrate(next));
         candidate.revision = (state.revision || 0) + 1;
         const s = JSON.stringify(candidate);
+        for (const month of Object.keys(candidate.settledStarts || {}))
+          if (!state.settledStarts?.[month] && raw)
+            storage.setItem(key + "_before_settled_start_" + month, raw);
         if (raw) storage.setItem(key + "_last_good", raw);
         storage.setItem(key, s);
         state = candidate;
@@ -575,7 +579,7 @@
           (!x.lastMonth || item.month <= x.lastMonth),
       )
       .map((loan) => {
-        const paid = sum(
+        const paid = (d.settledStarts?.[item.month]?.loans?.[loan.id] || 0) + sum(
           d.moves.filter(
             (m) =>
               active(m) &&
@@ -652,7 +656,52 @@
     if (request.from) item.bankAccountId = request.from;
     return next;
   }
+  // A reviewed opening snapshot acknowledges past execution without inventing cash moves.
+  function settledStart(input, r) {
+    const d = clone(input);
+    if (!Number.isFinite(idx(r.month)) || !/^\d{4}-\d{2}-\d{2}$/.test(r.date))
+      throw Error("حدد تاريخ المطابقة وشهر الميزانية");
+    if (new Date(r.date + "T12:00:00Z").toISOString().slice(0,10) !== r.date || r.date > today())
+      throw Error("تاريخ المطابقة غير صالح");
+    if (d.settledStarts?.[r.month]) throw Error("تمت تهيئة هذا الشهر سابقًا؛ استخدم التسوية لتصحيح رصيد");
+    const items = d.budget.filter(b => b.month === r.month);
+    if (!items.length) throw Error("أضف ميزانية الشهر أولًا");
+    if (d.surplusPlans?.[r.month]?.closed) throw Error("الشهر مغلق");
+    const snap = {date:r.date, month:r.month, distributionApproved:true, closed:false,
+      existingMoveIds:d.moves.map(m => m.id), salaryReceived:sar(cents(r.salaryReceived)), items:{}, loans:{}, funding:{}, at:stamp()};
+    if (snap.salaryReceived < 0) throw Error("الراتب غير صالح");
+    for (const a of d.accounts) {
+      if (!Object.hasOwn(r.accounts || {}, a.id)) throw Error("راجع رصيد كل حساب");
+      const target = sar(cents(r.accounts[a.id]));
+      if (target < 0) throw Error("رصيد الحساب سالب");
+      a.balanceAdjustment = sar(val(a.balanceAdjustment) + val(target) - val(balance(d,a)));
+      snap.funding[a.id] = Math.max(0, sar(val(sum(items.filter(b => accountFor(d,b)?.id === a.id), b => b.amount)) - val(sum((d.fundingLinks || []).filter(l => l.month === r.month && l.accountId === a.id && !l.unlinked), l => d.moves.find(m => m.id === l.moveId && active(m))?.amount || 0))));
+    }
+    for (const debt of d.debts) {
+      if (!Object.hasOwn(r.debts || {}, debt.id)) throw Error("راجع رصيد كل دين");
+      const target = sar(cents(r.debts[debt.id]));
+      if (target < 0) throw Error("رصيد الدين سالب");
+      debt.snapshotAdjustment = sar(val(debt.snapshotAdjustment) + val(target) - val(debtBalance(d,debt)));
+      if (debt.kind === "loan" && debt.monthlyPayment != null) {
+        const payment = sar(cents(r.installments?.[debt.id]));
+        if (payment < 0) throw Error("القسط غير صالح");
+        debt.monthlyPayment = payment;
+      }
+    }
+    for (const b of items) {
+      if (category(b) === "loan" && items.filter(x => category(x) === "loan").length === 1) b.amount = sum(loanInstallments(d,b), row => row.loan.monthlyPayment);
+      if (!(r.paidItems || []).includes(b.id)) continue;
+      snap.items[b.id] = {paid:paymentStatus(d,b).rest};
+      if (category(b) === "loan") for (const row of loanInstallments(d,b)) snap.loans[row.loan.id] = row.due;
+    }
+    d.settledStarts ??= {};
+    d.settledStarts[r.month] = snap;
+    audit(d,"settled-start",{month:r.month, after:snap});
+    validate(d);
+    return d;
+  }
   g.Accounting = {
+    settledStart,
     KEY,
     loanInstallments,
     payLoanGroup,

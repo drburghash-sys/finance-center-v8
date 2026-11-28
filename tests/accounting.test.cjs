@@ -579,3 +579,64 @@ test("loan group partial, independent linking and reversal leave other loan inta
   assert.equal(A.loanInstallments(d, d.budget[0])[1].due, 2500);
   assert.equal(d.moves.find((x) => x.id === "old").posted, true);
 });
+
+test("settled opening reconciles assets and debts without inventing transactions", () => {
+  const d = fixture(), original = JSON.stringify(d);
+  const r = {month:"2026-12",date:"2026-11-28",salaryReceived:10000,
+    accounts:Object.fromEntries(d.accounts.map(a=>[a.id,a.id==="salary"?1250:0])),
+    debts:Object.fromEntries(d.debts.map(a=>[a.id,900])),installments:{loan:950},paidItems:["b"]};
+  const next=A.settledStart(d,r);
+  assert.equal(JSON.stringify(d),original);
+  assert.deepEqual(next.moves,d.moves);
+  assert.equal(A.balance(next,"salary"),1250);
+  assert.equal(A.debtBalance(next,"card"),900);
+  assert.equal(next.debts.find(x=>x.id==="loan").monthlyPayment,950);
+  assert.equal(A.paymentStatus(next,next.budget[0]).rest,0);
+  assert.equal(next.settledStarts["2026-12"].closed,false);
+  assert.throws(()=>A.settledStart(next,r));
+  assert.throws(()=>A.post(next,move("duplicate","expense",1000,{from:"salary",budgetMonth:"2026-12",budgetItemId:"b"})));
+  assert.throws(()=>A.post(next,move("salaryagain","income",10000,{to:"salary",budgetMonth:"2026-12",category:"راتب"})));
+  const row=C.simulate(next,{start:"2026-12",months:1}).rows[0];
+  assert.equal(row.cash,1250);
+  A.post(next,move("daily","expense",25,{from:"salary"}));
+  assert.equal(A.balance(next,"salary"),1225);
+  assert.equal(A.debtBalance(A.migrate(JSON.parse(JSON.stringify(next))),"card"),900);
+});
+
+test("settled opening accounts for existing payments and keeps new income separate",()=>{
+  const d=fixture();
+  A.post(d,move("part","expense",400,{from:"salary",budgetMonth:"2026-12",budgetItemId:"b"}));
+  A.post(d,move("salaryold","income",10000,{to:"salary",budgetMonth:"2026-12",category:"راتب"}));
+  const r={month:"2026-12",date:"2026-11-28",salaryReceived:10000,
+    accounts:Object.fromEntries(d.accounts.map(a=>[a.id,a.id==="salary"?1500:0])),
+    debts:Object.fromEntries(d.debts.map(a=>[a.id,1000])),installments:{loan:1000},paidItems:["b"]};
+  const n=A.settledStart(d,r);
+  assert.equal(A.paymentStatus(n,n.budget[0]).paid,1000);
+  assert.equal(n.settledStarts["2026-12"].items.b.paid,600);
+  assert.equal(C.simulate(n,{start:"2026-12",months:1}).rows[0].cash,1500);
+  A.post(n,move("extra","income",200,{to:"salary",budgetMonth:"2026-12"}));
+  assert.equal(C.simulate(n,{start:"2026-12",months:1}).rows[0].cash,1500);
+  assert.equal(A.balance(n,"salary"),1700);
+  const bad=structuredClone(r);delete bad.accounts.bills;
+  assert.throws(()=>A.settledStart(d,bad));
+});
+
+test("legacy migration never rewrites the amount of an old visa payment",()=>{
+  const d=fixture();delete d.schemaVersion;
+  d.budget=[{id:"v",name:"فيزا",month:"2026-12",type:"debt",amount:5000}];
+  d.moves=[move("budget-visa-v","repayment",2000,{source:"budget-visa",from:"salary",debtId:"card",principal:2000,budgetMonth:"2026-12"})];
+  assert.equal(A.migrate(d).moves[0].amount,2000);
+});
+
+test("settled opening stores a dedicated rollback copy and rejects bypassed duplicate payments",()=>{
+  const d=fixture(), r={month:"2026-12",date:"2026-11-28",salaryReceived:10000,
+    accounts:Object.fromEntries(d.accounts.map(a=>[a.id,A.balance(d,a)])),
+    debts:Object.fromEntries(d.debts.map(a=>[a.id,A.debtBalance(d,a)])),installments:{loan:1000},paidItems:["b"]};
+  const mem=new Map([[A.KEY,JSON.stringify(d)]]);
+  const storage={getItem:k=>mem.get(k)||null,setItem:(k,v)=>mem.set(k,v)};
+  const st=A.storage(storage);st.commit(A.settledStart(st.get(),r));
+  assert.equal(mem.get(A.KEY+"_before_settled_start_2026-12"),JSON.stringify(d));
+  const bad=st.get();bad.moves.push(move("bypass","expense",1000,{from:"salary",budgetItemId:"b",budgetMonth:"2026-12"}));
+  assert.throws(()=>st.commit(bad));
+  assert.equal(st.get().moves.length,0);
+});
