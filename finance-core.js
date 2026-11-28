@@ -338,7 +338,7 @@
       const actual = d.moves.filter(
           (x) => A.active(x) && (x.budgetMonth || x.date.slice(0, 7)) === m,
         ),
-        received = Math.max(0, n(d.settledStarts?.[m]?.salaryReceived) - A.sum(actual.filter(x => x.kind === "income" && (x.category === "راتب" || ["scheduled-salary", "salary-v3"].includes(x.source))), x => x.amount)) + A.sum(
+        received = Math.max(0, Math.max(n(d.settledStarts?.[m]?.salaryReceived), d.openingSalary?.month===m ? n(d.openingSalary.amount) : 0) - A.sum(actual.filter(x => x.kind === "income" && (x.category === "راتب" || ["scheduled-salary", "salary-v3"].includes(x.source))), x => x.amount)) + A.sum(
           actual.filter((x) => ["income", "profit"].includes(x.kind)),
           (x) => x.amount,
         ),

@@ -91,6 +91,8 @@
       throw Error("شهر الميزانية غير صالح");
     if (m.kind === "income" && (m.category === "راتب" || ["scheduled-salary", "salary-v3"].includes(m.source)) && d.settledStarts?.[m.budgetMonth]?.salaryReceived > 0 && !d.settledStarts[m.budgetMonth].existingMoveIds.includes(m.id))
       throw Error("راتب الشهر مثبت ضمن نقطة البداية");
+    if (m.kind === "income" && (m.category === "راتب" || ["scheduled-salary","salary-v3"].includes(m.source)) && d.openingSalary?.month === m.budgetMonth && d.openingSalary.amount > 0)
+      throw Error("راتب شهر البداية مشمول في الأرصدة التي ستدخلها؛ لا تضفه ثانية");
     const account = (id) => d.accounts.some((a) => a.id === id),
       debt = d.debts.find((x) => x.id === m.debtId);
     if (
@@ -192,6 +194,12 @@
       if (val(b.amount) < 0 || !Number.isFinite(idx(b.month)))
         throw Error("بند ميزانية غير صالح");
     }
+    const priorIds=new Set();
+    for(const x of d.priorPayments || []) {
+      if(!x.id || priorIds.has(x.id) || !d.budget.some(b=>b.id===x.itemId && b.month===x.month) || val(x.amount)<=0)
+        throw Error("إثبات دفع سابق غير صالح");
+      priorIds.add(x.id);
+    }
     for (const [month, snap] of Object.entries(d.settledStarts || {})) {
       if (!Number.isFinite(idx(month)) || !Array.isArray(snap.existingMoveIds) || val(snap.salaryReceived) < 0)
         throw Error("تهيئة شهر غير صالحة");
@@ -236,7 +244,7 @@
   }
   function paymentStatus(d, b) {
     const ms = d.moves.filter((m) => active(m) && m.budgetItemId === b.id),
-      paid = sar(val(sum(ms, (m) => m.amount)) + val(d.settledStarts?.[b.month]?.items?.[b.id]?.paid)),
+      paid = sar(val(sum(ms, (m) => m.amount)) + val(d.settledStarts?.[b.month]?.items?.[b.id]?.paid) + val(sum((d.priorPayments || []).filter(x => x.itemId === b.id && !x.reversed), x => x.amount))),
       rest = Math.max(0, sar(val(b.amount) - val(paid)));
     return {
       paid,
@@ -516,6 +524,20 @@
       });
     return {
       get: () => clone(state),
+      async freshStartLocked(month) {
+        if (!g.navigator?.locks) throw Error("استخدم متصفحًا حديثًا يدعم الحفظ الآمن");
+        return g.navigator.locks.request(key+":write", () => this.freshStart(month));
+      },
+      freshStart(month) {
+        if (storage.getItem(key)!==raw) throw Error("تغيرت البيانات في تبويب آخر");
+        const next=freshStart(state,month), archive=key+"_archive_"+Date.now();
+        if (!raw) throw Error("لا توجد بيانات محفوظة لأرشفتها");
+        storage.setItem(archive,raw);
+        storage.setItem(key+"_before_fresh_start",raw);
+        storage.setItem(key,JSON.stringify(next));
+        state=next;raw=JSON.stringify(next);
+        return clone(state);
+      },
       async commitLocked(next) {
         if (!g.navigator?.locks)
           throw Error(
@@ -579,7 +601,7 @@
           (!x.lastMonth || item.month <= x.lastMonth),
       )
       .map((loan) => {
-        const paid = (d.settledStarts?.[item.month]?.loans?.[loan.id] || 0) + sum(
+        const paid = (d.settledStarts?.[item.month]?.loans?.[loan.id] || 0) + sum((d.priorPayments || []).filter(x=>x.itemId===item.id && !x.reversed), x=>x.loanPayments?.[loan.id] || 0) + sum(
           d.moves.filter(
             (m) =>
               active(m) &&
@@ -700,7 +722,77 @@
     validate(d);
     return d;
   }
+  function freshStart(input, month) {
+    if (!Number.isFinite(idx(month))) throw Error("اختر شهر البداية");
+    if (input.trackingStartMonth) throw Error("تم بدء سجل جديد سابقًا؛ استعد الأرشيف قبل تكرار البداية");
+    const template = input.budget.filter(b => b.month === month);
+    if (!template.length) throw Error("لا توجد ميزانية للشهر المختار؛ لن تُستبدل البيانات");
+    const d = {schemaVersion:VERSION, revision:0, trackingStartMonth:month,
+      accounts: input.accounts.map(a => ({...clone(a), opening:0, balanceAdjustment:0})),
+      debts: input.debts.map(a => ({...clone(a), opening:0, balanceAdjustment:0, snapshotAdjustment:0})),
+      budget:template.map(b => ({...clone(b), paid:false})),
+      openingSalary:{month,amount:Number(input.budgetIncomeOverrides?.[month]?.salary ?? input.legacy?.budgetMonths?.[month]?.salary ?? 0)},
+      moves:[], commitments:clone(input.commitments), projects:clone(input.projects),
+      journal:[], ledgerEvents:[], reviewIssues:[], seenHashes:{}, learnedRules:[],
+      confirmations:{accounts:{},budget:{}}, settings:clone(input.settings || {}),
+      salaryCountdown:clone(input.salaryCountdown || {}), autoSalary:{enabled:false},
+      scheduleRules:clone(input.scheduleRules || []), policy:clone(input.policy || {}),
+      legacy:{budgetMonths:{[month]:clone(input.legacy?.budgetMonths?.[month] || {})},
+        links:clone(input.legacy?.links || {}),itemLinks:clone(input.legacy?.itemLinks || {}),
+        budgetAccounts:clone(input.legacy?.budgetAccounts || [])}};
+    if (input.budgetIncomeOverrides?.[month]) d.budgetIncomeOverrides = {[month]:clone(input.budgetIncomeOverrides[month])};
+    if (input.retirement) d.retirement = {...clone(input.retirement), draws:[], restoreRemaining:0};
+    audit(d,"fresh-start",{month,message:"أرصدة صفر؛ السجل السابق محفوظ في أرشيف الجهاز"});
+    validate(d);
+    return d;
+  }
+  function acknowledgePaid(input, request) {
+    const d=clone(input), b=d.budget.find(x=>x.id===request.itemId);
+    if (!b) throw Error("البند غير موجود");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(request.date || "") || new Date(request.date+"T12:00:00Z").toISOString().slice(0,10)!==request.date || request.date>today()) throw Error("تاريخ الإثبات غير صالح");
+    const amount=sar(cents(request.amount));
+    if (amount<=0 || val(amount)>val(paymentStatus(d,b).rest)) throw Error("المبلغ يتجاوز المتبقي أو البند مسدد");
+    d.priorPayments ??= [];
+    const loanPayments = category(b)==="loan" && val(amount)===val(paymentStatus(d,b).rest) ? Object.fromEntries(loanInstallments(d,b).map(r=>[r.loan.id,r.due])) : {};
+    d.priorPayments.push({id:request.id,itemId:b.id,month:b.month,amount,date:request.date,loanPayments,reversed:false});
+    audit(d,"acknowledge-paid",{itemId:b.id,amount,message:"مشمول في الأرصدة المدخلة؛ دون خصم جديد"});
+    return d;
+  }
+  function externalFunding(input, request) {
+    let d=clone(input);
+    if (!request.payments?.length) throw Error("لا توجد بنود للدفع");
+    const before=new Set(d.moves.map(m=>m.id));
+    for (const p of request.payments) {
+      const b=d.budget.find(x=>x.id===p.itemId && x.month===request.month && accountFor(d,x)?.id===request.accountId);
+      if (!b) throw Error("راجع ربط البند بالحساب والشهر");
+      if (["saving","investment"].includes(b.type)) throw Error("الادخار والاستثمار يحتاجان تحويلًا حقيقيًا أو إثباتًا سابقًا دون خصم");
+      if (category(b)==="loan" && loanInstallments(d,b).length) {
+        const rows=loanInstallments(d,b);
+        d=payLoanGroup(d,{itemId:b.id,from:request.from,date:request.date,operationKey:request.id+":"+b.id,
+          payments:rows.filter(r=>r.due>0).map(r=>({id:request.id+":"+b.id+":"+r.loan.id,debtId:r.loan.id,amount:r.due,principal:""}))});
+      } else {
+        const amount=paymentStatus(d,b).rest;
+        if (!amount) continue;
+        const debt=b.type==="debt" ? d.debts.find(x=>x.id===p.debtId) : null;
+        if (b.type==="debt" && !debt) throw Error("حدد البطاقة أو الدين للبند");
+        const principal=debt?.kind==="credit" ? amount : 0;
+        if (debt && principal>debtBalance(d,debt)) throw Error("أدخل المديونية الصحيحة قبل سداد الفيزا");
+        post(d,{id:request.id+":"+b.id,operationKey:request.id+":"+b.id,kind:debt?"repayment":"expense",
+          amount,principal,principalKnown:!!debt && debt.kind==="credit",from:request.from,date:request.date,
+          debtId:debt?.id || "",budgetItemId:b.id,budgetMonth:b.month,source:"budget-payment-v3",posted:true});
+      }
+    }
+    const created=d.moves.filter(m=>!before.has(m.id));
+    if (!created.length) throw Error("البنود مسددة بالفعل؛ لم يتم الخصم");
+    const total=sum(created,m=>m.amount);
+    if (val(total)>val(balance(input,request.from))) throw Error("الرصيد لا يكفي؛ راجع حساب الدفع");
+    d.fundingLinks ??= [];
+    for(const m of created) d.fundingLinks.push({id:"fund:"+m.id,month:request.month,accountId:request.accountId,moveId:m.id,owned:true,external:true,at:stamp()});
+    audit(d,"external-funding",{accountId:request.accountId,amount:total,message:"دفع مباشر؛ خصم من المصدر دون إضافة للمستلم"});
+    return d;
+  }
   g.Accounting = {
+    freshStart, acknowledgePaid, externalFunding,
     settledStart,
     KEY,
     loanInstallments,
