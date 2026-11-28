@@ -756,3 +756,58 @@ test("simple funding rejects zero allocations, invalid choices and insufficient 
   assert.throws(()=>A.confirmFunding(d,{...r,accountId:"reserve",mode:"prior"}));
   assert.equal(d.moves.length,0);
 });
+
+test("simple item previously paid records selected non-salary source with no financial effect",()=>{
+  const d=fixture(),r={id:"priorb",itemId:"b",from:"bills",mode:"prior",date:"2026-11-28"};
+  const n=A.confirmBudgetPayment(d,r);
+  for(const a of d.accounts)assert.equal(A.balance(n,a.id),A.balance(d,a.id));
+  assert.equal(A.paymentStatus(n,n.budget[0]).complete,true);
+  assert.equal(n.budget[0].paymentSourceId,"bills");assert.equal(n.priorPayments[0].from,"bills");
+  assert.equal(n.moves.length,0);assert.throws(()=>A.confirmBudgetPayment(n,{...r,id:"repeat"}));
+});
+
+test("simple item new expense uses chosen account once and marks the item paid",()=>{
+  const d=fixture();d.accounts.find(a=>a.id==="bills").opening=1500;
+  const r={id:"paybill",itemId:"b",from:"bills",mode:"new",date:"2026-11-28"};
+  const n=A.confirmBudgetPayment(d,r);
+  assert.equal(A.balance(n,"bills"),500);assert.equal(A.balance(n,"salary"),20000);
+  assert.equal(A.paymentStatus(n,n.budget[0]).complete,true);
+  assert.throws(()=>A.confirmBudgetPayment(n,{...r,id:"repeat"}));
+  assert.equal(A.balance(d,"bills"),1500);
+});
+
+test("simple saving moves money internally; prior saving proof does not invent assets",()=>{
+  const d=fixture();d.budget[0].type="saving";
+  const r={id:"saveb",itemId:"b",from:"salary",to:"reserve",mode:"new",date:"2026-11-28"};
+  const n=A.confirmBudgetPayment(d,r);
+  assert.equal(A.balance(n,"salary"),19000);assert.equal(A.balance(n,"reserve"),1000);
+  const p=A.confirmBudgetPayment(d,{...r,mode:"prior"});
+  assert.equal(A.balance(p,"salary"),20000);assert.equal(A.balance(p,"reserve"),0);
+});
+
+test("simple debt payment lowers only chosen card, while previous proof keeps debt unchanged",()=>{
+  const d=fixture();d.budget[0].type="debt";d.budget[0].financialCategory="visa";
+  const r={id:"paycard",itemId:"b",from:"salary",debtId:"card2",mode:"new",date:"2026-11-28"};
+  const n=A.confirmBudgetPayment(d,r);
+  assert.equal(A.debtBalance(n,"card2"),300);assert.equal(A.debtBalance(n,"card"),7000);assert.equal(A.balance(n,"salary"),19000);
+  const p=A.confirmBudgetPayment(d,{...r,mode:"prior"});assert.equal(A.debtBalance(p,"card2"),1300);assert.equal(A.balance(p,"salary"),20000);
+});
+
+test("simple grouped loans use non-salary source and actual installment total without inventing principal",()=>{
+  const d=fixture();d.accounts.find(a=>a.id==="bills").opening=2000;
+  d.budget[0].type="debt";d.budget[0].financialCategory="loan";d.budget[0].amount=1001;
+  const r={id:"loanpay",itemId:"b",from:"bills",mode:"new",date:"2026-11-28"};
+  const n=A.confirmBudgetPayment(d,r);
+  assert.equal(A.balance(n,"bills"),1000);assert.equal(A.balance(n,"salary"),20000);
+  assert.equal(A.debtBalance(n,"loan"),100000);assert.equal(A.paymentStatus(n,n.budget[0]).complete,true);
+  assert.equal(n.budget[0].amount,1000);assert.equal(n.budget[0].bankAccountId,"bills");
+  const empty=fixture();empty.budget[0].type="debt";empty.budget[0].financialCategory="loan";
+  assert.throws(()=>A.confirmBudgetPayment(empty,r));assert.equal(empty.moves.length,0);
+});
+
+test("simple payment links an existing debit instead of charging again and supports partial payments",()=>{
+  const d=fixture();A.post(d,move("existingexpense","expense",400,{from:"salary",budgetMonth:"2026-12"}));
+  const r={id:"linkbill",itemId:"b",from:"salary",mode:"new",amount:400,date:"2026-11-28"};
+  const n=A.confirmBudgetPayment(d,r);assert.equal(n.moves.length,1);assert.equal(A.balance(n,"salary"),19600);
+  assert.equal(A.paymentStatus(n,n.budget[0]).rest,600);
+});

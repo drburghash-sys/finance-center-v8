@@ -759,7 +759,7 @@
     if (amount<=0 || val(amount)>val(paymentStatus(d,b).rest)) throw Error("المبلغ يتجاوز المتبقي أو البند مسدد");
     d.priorPayments ??= [];
     const loanPayments = category(b)==="loan" && val(amount)===val(paymentStatus(d,b).rest) ? Object.fromEntries(loanInstallments(d,b).map(r=>[r.loan.id,r.due])) : {};
-    d.priorPayments.push({id:request.id,itemId:b.id,month:b.month,amount,date:request.date,loanPayments,reversed:false});
+    d.priorPayments.push({id:request.id,itemId:b.id,month:b.month,amount,date:request.date,from:request.from,loanPayments,reversed:false});
     audit(d,"acknowledge-paid",{itemId:b.id,amount,message:"مشمول في الأرصدة المدخلة؛ دون خصم جديد"});
     return d;
   }
@@ -838,10 +838,11 @@
     if(!Number.isFinite(idx(r.month)) || !d.accounts.some(a=>a.id===r.accountId)) throw Error("اختر الحساب والشهر الصحيحين");
     if(!status.planned) throw Error("لا توجد مخصصات لهذا الحساب في الشهر المختار؛ اربط البنود بالحساب من الميزانية أولًا");
     if(!status.rest) throw Error("هذا الحساب مؤكد بالفعل");
-    if(!["prior","transfer"].includes(r.mode)) throw Error("اختر دُفع سابقًا أو يحتاج تحويل");
+    if(!["prior","transfer"].includes(r.mode)) throw Error("اختر دُفع سابقًا أو لم يُدفع بعد");
+    if(r.from && !d.accounts.some(a=>a.id===r.from)) throw Error("حساب المصدر غير موجود");
     const amount=sar(cents(r.amount ?? status.rest));
     if(amount<=0 || val(amount)>val(status.rest)) throw Error("المبلغ يتجاوز المتبقي");
-    const candidates=d.moves.filter(m=>active(m) && m.kind==="transfer" && m.to===r.accountId && val(m.amount)===val(amount) &&
+    const candidates=d.moves.filter(m=>active(m) && m.kind==="transfer" && m.to===r.accountId && (!r.from || m.from===r.from) && val(m.amount)===val(amount) &&
       ((m.budgetMonth||m.date.slice(0,7))===r.month || Math.abs(new Date(m.date)-new Date(r.month+"-01"))<=7*86400000) &&
       !(d.fundingLinks||[]).some(l=>!l.unlinked && l.moveId===m.id));
     if(candidates.length>1) throw Error("توجد تحويلات متطابقة؛ راجع سجل الحركات قبل التأكيد");
@@ -851,15 +852,69 @@
     } else if(r.mode==="prior") {
       d.priorFunding ??= {};d.priorFunding[r.month] ??= {};
       d.priorFunding[r.month][r.accountId]=sar(val(d.priorFunding[r.month][r.accountId])+val(amount));
-      audit(d,"acknowledge-funding",{accountId:r.accountId,month:r.month,amount,message:"دُفع سابقًا؛ لا تغيير للأرصدة أو سداد البنود"});
+      audit(d,"acknowledge-funding",{accountId:r.accountId,month:r.month,amount,from:r.from,message:"دُفع سابقًا؛ لا تغيير للأرصدة أو سداد البنود"});
     } else {
       if(val(balance(d,r.from))<val(amount)) throw Error("رصيد المصدر لا يكفي للتحويل");
       post(d,{id:r.id,operationKey:"funding:"+r.id,kind:"transfer",amount,from:r.from,to:r.accountId,date:r.date,budgetMonth:r.month,source:"budget-funding-v3",posted:true});
       d.fundingLinks ??= [];d.fundingLinks.push({id:"link:"+r.id,month:r.month,accountId:r.accountId,moveId:r.id,owned:true,at:stamp()});
     }
+    if(r.from){d.fundingSources ??= {};d.fundingSources[r.month] ??= {};d.fundingSources[r.month][r.accountId]=r.from;}
+    return d;
+  }
+  function confirmBudgetPayment(input,r) {
+    let d=clone(input), b=d.budget.find(x=>x.id===r.itemId);
+    if(!b || !d.accounts.some(a=>a.id===r.from)) throw Error("اختر حساب المصدر");
+    if(!["prior","new"].includes(r.mode)) throw Error("اختر دُفع سابقًا أو لم يُدفع بعد");
+    const rows=category(b)==="loan" ? loanInstallments(d,b) : [];
+    if(rows.length) {
+      const total=sum(rows,row=>row.loan.monthlyPayment);
+      if(val(b.amount)!==val(total)) {audit(d,"align-loan-budget",{itemId:b.id,before:b.amount,after:total});b.amount=total;}
+    }
+    const status=paymentStatus(d,b), amount=sar(cents(r.amount ?? status.rest));
+    if(!status.rest || amount<=0 || val(amount)>val(status.rest)) throw Error("البند مسدد بالفعل أو المبلغ يتجاوز المتبقي");
+    if(r.mode==="prior") {
+      d=acknowledgePaid(d,{id:r.id,itemId:b.id,amount,date:r.date,from:r.from});
+      d.budget.find(x=>x.id===b.id).paymentSourceId=r.from;
+      return d;
+    }
+    if(rows.length) {
+      if(val(amount)!==val(sum(rows,row=>row.due))) throw Error("للسداد الجزئي للقروض استخدم التفاصيل");
+      const originalBank=b.bankAccountId;
+      d=payLoanGroup(d,{itemId:b.id,from:r.from,date:r.date,operationKey:r.id,payments:rows.filter(row=>row.due>0).map(row=>{
+        const previous=d.moves.filter(m=>active(m)&&m.kind==="repayment"&&!m.budgetItemId&&m.debtId===row.loan.id&&m.from===r.from&&val(m.amount)===val(row.due)&&(m.budgetMonth||m.date.slice(0,7))===b.month);
+        if(previous.length>1)throw Error("توجد دفعات متطابقة؛ راجع السجل");
+        return {id:r.id+":"+row.loan.id,debtId:row.loan.id,amount:row.due,principal:"",existing:previous[0]?.id};
+      })});
+      b=d.budget.find(x=>x.id===r.itemId);
+      if(originalBank==null)delete b.bankAccountId;else b.bankAccountId=originalBank;
+    } else {
+      const saving=["saving","investment"].includes(b.type), debt=b.type==="debt";
+      const debtId=r.debtId || b.debtId;
+      const loan=debt?d.debts.find(x=>x.id===debtId):null;
+      const to=saving?(r.to || b.destinationAccountId):"";
+      if(debt && !loan)throw Error("حدد البطاقة أو الدين المستفيد مرة واحدة");
+      if(saving && !d.accounts.some(a=>a.id===to))throw Error("حدد حساب الادخار أو الاستثمار المستلم");
+      const kind=debt?"repayment":saving?"transfer":"expense";
+      const prior=d.moves.filter(m=>active(m)&&!m.budgetItemId&&m.kind===kind&&m.from===r.from&&val(m.amount)===val(amount)&&
+        (!debt||m.debtId===debtId)&&(!saving||m.to===to)&&((m.budgetMonth||m.date.slice(0,7))===b.month || Math.abs(new Date(m.date)-new Date(b.month+"-01"))<=7*86400000));
+      if(prior.length>1)throw Error("توجد حركات متطابقة؛ راجع السجل");
+      if(prior.length===1) link(d,prior[0].id,b.id,b.month);
+      else {
+        if(val(balance(d,r.from))<val(amount))throw Error("رصيد المصدر لا يكفي؛ راجع الحساب المختار");
+        const principal=loan?.kind==="credit"?amount:0;
+        if(debt && principal>debtBalance(d,loan))throw Error("راجع مديونية البطاقة قبل السداد");
+        post(d,{id:r.id,operationKey:r.id,kind,amount,from:r.from,to,debtId:loan?.id||"",principal,principalKnown:loan?.kind==="credit",date:r.date,budgetMonth:b.month,budgetItemId:b.id,source:"budget-payment-v3",posted:true});
+      }
+      if(debt)b.debtId=debtId;
+      if(saving)b.destinationAccountId=to;
+    }
+    b.paymentSourceId=r.from;
+    if(val(balance(d,r.from))<0 && val(balance(d,r.from))<val(balance(input,r.from))) throw Error("رصيد المصدر لا يكفي للدفع");
+    validate(d);
     return d;
   }
   g.Accounting = {
+    confirmBudgetPayment,
     fundingStatus, confirmFunding,
     confirmSalary, salaryStatus,
     freshStart, acknowledgePaid, externalFunding,

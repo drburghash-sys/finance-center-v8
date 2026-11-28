@@ -261,6 +261,44 @@
     );
   }
   function pay(bid) {
+    const app=g.FinanceApp,d=app.get(),b=d.budget.find(x=>x.id===bid);
+    if(!b)throw Error("البند غير موجود");
+    const loanRows=A.category(b)==="loan"?A.loanInstallments(d,b):[];
+    const status=A.paymentStatus(d,b), amount=loanRows.length?A.sum(loanRows,row=>row.due):status.rest;
+    const source=b.paymentSourceId || A.accountFor(d,b)?.id || d.settings.salaryAccountId;
+    const saving=["saving","investment"].includes(b.type), debt=b.type==="debt" && !loanRows.length;
+    const targets=saving?d.accounts.filter(a=>a.role===(b.type==="saving"?"reserve":"investment")):[];
+    const debts=debt?d.debts.filter(x=>A.category(b)==="visa"?x.kind==="credit":true):[];
+    const debtId=b.debtId || (debts.length===1?debts[0].id:"");
+    const to=b.destinationAccountId || (targets.length===1?targets[0].id:"");
+    const prior=(d.priorPayments||[]).filter(x=>x.itemId===bid&&!x.reversed);
+    dialog("تأكيد دفع: "+b.name,
+      '<p>الشهر '+esc(b.month)+' • المتبقي <strong>'+money(amount)+'</strong></p>'+
+      select("from","حساب المصدر",accounts(d),source)+
+      (amount>0?
+      '<label class="form-field"><span><input type="radio" name="mode" value="prior" required> دُفع سابقًا</span><small>تأكيد فقط؛ لا خصم ولا إضافة.</small></label>'+
+      '<label class="form-field"><span><input type="radio" name="mode" value="new" required> لم يُدفع بعد</span><small>بعد تنفيذ الدفع، أكّده هنا من حساب المصدر المختار.</small></label>'+
+      '<div id="payment-targets" hidden>'+
+      (debt&&!debtId?select("debtId","البطاقة أو الدين المستفيد — يُحفظ بعد اختياره",[["","اختر المستفيد"],...debts.map(x=>[x.id,x.name])],""):"")+
+      (saving&&!to?select("to","حساب الاستلام — يُحفظ بعد اختياره",[["","اختر المستلم"],...targets.map(a=>[a.id,a.name])],""):"")+
+      '<p>'+(saving?"سيُخصم المبلغ من المصدر ويُضاف إلى حساب الاستلام.":debt||loanRows.length?"سيُخصم المبلغ من المصدر ويُسجل سداد الدين.":"سيُخصم المبلغ من المصدر كدفع للمستفيد.")+'</p></div>':"<p>✓ البند مدفوع بالكامل.</p>")+
+      '<details><summary>تفاصيل إضافية أو سداد جزئي</summary>'+field("amount","المبلغ",amount,"number",'min="0.01" step="0.01"')+field("date","تاريخ التنفيذ",A.today(),"date")+
+      '<button class="button outline" type="button" data-payment-advanced>فتح تفاصيل الدفعات</button></details>'+
+      (status.moves.length||prior.length?'<details><summary>الدفعات السابقة والتراجع</summary>'+status.moves.map(m=>'<p>'+money(m.amount)+' <button type="button" class="button mini outline" data-payment-undo="'+esc(m.id)+'">تراجع</button></p>').join("")+prior.map(p=>'<p>دُفع سابقًا '+money(p.amount)+' <button type="button" class="button mini outline" data-prior-undo="'+esc(p.id)+'">تراجع</button></p>').join("")+'</details>':""),
+      v=>app.saveState(A.confirmBudgetPayment(d,{...v,itemId:bid,id:id(),debtId:v.debtId||debtId,to:v.to||to})));
+    const form=host.querySelector("form"),submit=form.querySelector('[type="submit"]');
+    const update=()=>{const v=Object.fromEntries(new FormData(form)),box=host.querySelector("#payment-targets");if(box)box.hidden=v.mode!=="new";submit.disabled=!v.mode||amount<=0;submit.textContent=v.mode==="new"?"تأكيد تنفيذ الدفع":"تأكيد أنه دُفع سابقًا";};
+    form.addEventListener("change",update);update();
+    host.querySelector("[data-payment-advanced]").onclick=()=>payAdvanced(bid);
+    host.querySelectorAll("[data-payment-undo],[data-prior-undo]").forEach(btn=>btn.onclick=async()=>{
+      if(!confirm("التراجع عن هذه الدفعة فقط؟"))return;
+      const next=A.clone(d);
+      if(btn.dataset.priorUndo){const p=next.priorPayments.find(x=>x.id===btn.dataset.priorUndo);p.reversed=true;A.audit(next,"reverse-prior-payment",{before:p});}
+      else {const m=next.moves.find(x=>x.id===btn.dataset.paymentUndo);if(["budget-payment-v3","budget-visa"].includes(m.source))A.reverse(next,m.id);else{A.audit(next,"unlink-budget",{moveId:m.id});delete m.budgetItemId;}}
+      if(await app.saveState(next))pay(bid);
+    });
+  }
+  function payAdvanced(bid) {
     const app = g.FinanceApp,
       d = app.get(),
       b = d.budget.find((x) => x.id === bid);
@@ -426,19 +464,19 @@
     const account=choices.find(a=>a.id===selectedId) || choices.find(a=>A.fundingStatus(d,month,a.id).rest>0) || choices[0];
     if(!account) throw Error("لا يوجد حساب محدد");
     const state=A.fundingStatus(d,month,account.id),operationId=id();
-    const defaultSource=d.accounts.some(a=>a.id===d.settings.salaryAccountId && a.id!==account.id)?d.settings.salaryAccountId:
-      d.accounts.find(a=>a.id!==account.id && a.role==="bank")?.id || "";
+    const defaultSource=d.fundingSources?.[month]?.[account.id] || (d.accounts.some(a=>a.id===d.settings.salaryAccountId && a.id!==account.id)?d.settings.salaryAccountId:
+      d.accounts.find(a=>a.id!==account.id && a.role==="bank")?.id || "");
     const links=(d.fundingLinks||[]).filter(l=>l.month===month && l.accountId===account.id && !l.unlinked);
     dialog("تأكيد الحساب — "+month,
       (choices.length>1?select("account","اختر حسابًا واحدًا",choices.map(a=>[a.id,a.name]),account.id):"<h3>"+esc(account.name)+"</h3>")+
-      '<p>المتبقي للتأكيد: <strong>'+money(state.rest)+'</strong></p>'+
+      '<p>المتبقي للتأكيد: <strong>'+money(state.rest)+'</strong></p>'+select("from","حساب المصدر",accounts(d),defaultSource)+
       (state.planned===0?'<p>لا توجد مخصصات مرتبطة بهذا الحساب في الشهر المختار. راجع ربط البنود في الميزانية.</p>':state.rest===0?'<p>✓ هذا الحساب مؤكد بالفعل.</p>':
       '<label class="form-field"><span><input type="radio" name="mode" value="prior" required> دُفع سابقًا</span><small>إثبات فقط، دون تغيير الأرصدة.</small></label>'+
-      '<label class="form-field"><span><input type="radio" name="mode" value="transfer" required> يحتاج تحويل</span><small>بعد تنفيذ التحويل، أكّده هنا لخصمه من المصدر وإضافته لهذا الحساب.</small></label>'+
+      '<label class="form-field"><span><input type="radio" name="mode" value="transfer" required> لم يُدفع بعد</span><small>بعد تنفيذ التحويل، أكّده هنا لخصمه من المصدر وإضافته لهذا الحساب.</small></label>'+
       '<div id="fund-transfer" hidden><p>التحويل من <strong id="fund-source-name"></strong> إلى '+esc(account.name)+'.</p>'+
       '<details><summary>تعديل المبلغ أو حساب المصدر</summary>'+
       field("amount","مبلغ التحويل",state.rest,"number",'min="0.01" step="0.01"')+
-      select("from","حساب المصدر",accounts(d).filter(a=>a[0]!==account.id),defaultSource)+
+
       field("date","تاريخ التنفيذ",A.today(),"date")+'</details></div>')+
       (links.length?'<details><summary>العمليات السابقة والتراجع</summary>'+links.map(l=>'<p>'+money(d.moves.find(m=>m.id===l.moveId)?.amount||0)+' <button type="button" class="button mini outline" data-unfund="'+esc(l.id)+'">تراجع</button></p>').join("")+'</details>':""),
       async v=>{
@@ -447,6 +485,7 @@
         return app.saveState(next);
       });
     const form=host.querySelector("form"),submit=form.querySelector('[type="submit"]');submit.disabled=true;
+    const sourceInput=form.querySelector('[name="from"]');if(sourceInput)sourceInput.required=true;
     const update=()=>{
       const v=Object.fromEntries(new FormData(form));
       const box=host.querySelector("#fund-transfer");if(box) box.hidden=v.mode!=="transfer";

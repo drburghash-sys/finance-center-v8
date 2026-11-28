@@ -1699,7 +1699,7 @@
           "</b><small>" +
           esc(x.category || x.type) +
           "</small><small>حساب التنفيذ: " +
-          esc(linkedAccount(x)?.name || "غير محدد") +
+          esc(acc(x.paymentSourceId)?.name || linkedAccount(x)?.name || "غير محدد") +
           "</small><strong>" +
           money(x.amount) +
           "</strong><small>المثبت: " +
@@ -1718,7 +1718,7 @@
             s.complete ? "done" : "warn",
           ) +
           (x.amount > 0 || s.moves.length
-            ? button("دفع / ربط / تراجع", "payBudgetV3", x.id, "primary")
+            ? button(s.complete ? "مدفوع — عرض التفاصيل" : "تأكيد الدفع", "payBudgetV3", x.id, s.complete ? "outline" : "primary")
             : "<span>لا يستحق سدادًا</span>") +
           actions("Budget", x.id) +
           "</div></div>",
@@ -2702,7 +2702,7 @@
     updateSmsVisibility();
     window.SalaryCountdown?.refresh(document, data.salaryCountdown);
     $("storageStatus").textContent =
-      "الإصدار ٣.٠.٦ • " +
+      "الإصدار ٣.٠.٧ • " +
       data.moves.length +
       " حركة مسجلة • " +
       data.accounts.length +
