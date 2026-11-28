@@ -758,12 +758,7 @@
             d.accounts
               .filter(
                 (a) =>
-                  bankName(a) === bank &&
-                  d.budget.some(
-                    (x) =>
-                      x.month === g.FinanceApp.period() &&
-                      A.accountFor(d, x)?.id === a.id,
-                  ),
+                  bankName(a) === bank,
               )
               .map((a) => a.id),
           );
