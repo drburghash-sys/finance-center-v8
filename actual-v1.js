@@ -2328,7 +2328,7 @@
     return panel(
       "إيداع الراتب",
       "<p>الموعد توقع فقط. سجل الإيداع عند حدوثه أو اربطه برسالة البنك. لا تُنشأ رواتب تلقائية.</p>",
-      button("تسجيل إيداع مثبت", "recordSalary", null, "primary"),
+      button("إثبات وصول الراتب", "recordSalary", null, "primary"),
     );
   }
   function contentSalary() {
@@ -2705,12 +2705,16 @@
                           : page === "charts"
                             ? contentChart()
                             : contentData();
+    if (page==="accounts") {
+      const a=acc(data.settings.salaryAccountId), status=window.Accounting.salaryStatus(data,period);
+      html=panel("حساب الراتب",'<p>'+esc(a?.name || "اختر حساب الراتب عند الإثبات")+' • الرصيد '+money(a?accountBalance(a):0)+' • '+(status.confirmed?"وصول الراتب مثبت لشهر ":"إثبات الراتب لشهر ")+esc(period)+'</p>',button("إثبات وصول الراتب","recordSalary",null,"primary"))+html;
+    }
     const start = data.settledStarts?.[period];
     $("content").innerHTML = (start ? '<section class="panel"><p>شهر ' + esc(period) + ' معتمد التوزيع ومفتوح للصرف. أرصدة البداية مطابقة بتاريخ ' + esc(start.date) + '؛ البنود المثبتة سُددت سابقًا دون خصم جديد.</p></section>' : "") + html;
     updateSmsVisibility();
     window.SalaryCountdown?.refresh(document, data.salaryCountdown);
     $("storageStatus").textContent =
-      "الإصدار ٣.٠.٤ • " +
+      "الإصدار ٣.٠.٥ • " +
       data.moves.length +
       " حركة مسجلة • " +
       data.accounts.length +
