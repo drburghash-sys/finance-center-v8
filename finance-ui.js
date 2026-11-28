@@ -265,7 +265,7 @@
     if(!b)throw Error("البند غير موجود");
     const loanRows=A.category(b)==="loan"?A.loanInstallments(d,b):[];
     const status=A.paymentStatus(d,b), amount=loanRows.length?A.sum(loanRows,row=>row.due):status.rest;
-    const source=b.paymentSourceId || A.accountFor(d,b)?.id || d.settings.salaryAccountId;
+    const source=A.paymentSource(d,b)?.id || d.settings.salaryAccountId;
     const saving=["saving","investment"].includes(b.type), debt=b.type==="debt" && !loanRows.length;
     const targets=saving?d.accounts.filter(a=>a.role===(b.type==="saving"?"reserve":"investment")):[];
     const debts=debt?d.debts.filter(x=>A.category(b)==="visa"?x.kind==="credit":true):[];
@@ -275,6 +275,7 @@
     dialog("تأكيد دفع: "+b.name,
       '<p>الشهر '+esc(b.month)+' • المتبقي <strong>'+money(amount)+'</strong></p>'+
       select("from","حساب المصدر",accounts(d),source)+
+      '<p id="payment-route"></p>'+
       (amount>0?
       '<label class="form-field"><span><input type="radio" name="mode" value="prior" required> دُفع سابقًا</span><small>تأكيد فقط؛ لا خصم ولا إضافة.</small></label>'+
       '<label class="form-field"><span><input type="radio" name="mode" value="new" required> لم يُدفع بعد</span><small>بعد تنفيذ الدفع، أكّده هنا من حساب المصدر المختار.</small></label>'+
@@ -285,9 +286,17 @@
       '<details><summary>تفاصيل إضافية أو سداد جزئي</summary>'+field("amount","المبلغ",amount,"number",'min="0.01" step="0.01"')+field("date","تاريخ التنفيذ",A.today(),"date")+
       '<button class="button outline" type="button" data-payment-advanced>فتح تفاصيل الدفعات</button></details>'+
       (status.moves.length||prior.length?'<details><summary>الدفعات السابقة والتراجع</summary>'+status.moves.map(m=>'<p>'+money(m.amount)+' <button type="button" class="button mini outline" data-payment-undo="'+esc(m.id)+'">تراجع</button></p>').join("")+prior.map(p=>'<p>دُفع سابقًا '+money(p.amount)+' <button type="button" class="button mini outline" data-prior-undo="'+esc(p.id)+'">تراجع</button></p>').join("")+'</details>':""),
-      v=>app.saveState(A.confirmBudgetPayment(d,{...v,itemId:bid,id:id(),debtId:v.debtId||debtId,to:v.to||to})));
+      v=>amount<=0 ? app.saveState(A.correctPaymentSource(d,{itemId:bid,from:v.from})) : app.saveState(A.confirmBudgetPayment(d,{...v,itemId:bid,id:id(),debtId:v.debtId||debtId,to:v.to||to})));
     const form=host.querySelector("form"),submit=form.querySelector('[type="submit"]');
-    const update=()=>{const v=Object.fromEntries(new FormData(form)),box=host.querySelector("#payment-targets");if(box)box.hidden=v.mode!=="new";submit.disabled=!v.mode||amount<=0;submit.textContent=v.mode==="new"?"تأكيد تنفيذ الدفع":"تأكيد أنه دُفع سابقًا";};
+    const update=()=>{
+      const v=Object.fromEntries(new FormData(form)),box=host.querySelector("#payment-targets");if(box)box.hidden=v.mode!=="new";
+      const target=saving?A.accountLabel(d,v.to||to):loanRows.length?loanRows.map(r=>r.loan.name).join(" + "):debt?(d.debts.find(x=>x.id===(v.debtId||debtId))?.name||"اختر البطاقة أو الدين المستفيد"):b.name+" (دفع للمستفيد)";
+      host.querySelector("#payment-route").textContent="من: "+A.accountLabel(d,v.from)+" • إلى: "+target+(amount<=0?". تصحيح المصدر فقط؛ لا خصم ولا إضافة.":"");
+      const sourceOnly=amount<=0;
+      submit.disabled=sourceOnly?(!v.from||v.from===b.paymentSourceId):!v.mode;
+      submit.textContent=sourceOnly?"حفظ حساب المصدر فقط":v.mode==="new"?"تأكيد تنفيذ الدفع":"تأكيد أنه دُفع سابقًا";
+      const amountInput=form.querySelector('[name="amount"]');if(amountInput)amountInput.disabled=sourceOnly;
+    };
     form.addEventListener("change",update);update();
     host.querySelector("[data-payment-advanced]").onclick=()=>payAdvanced(bid);
     host.querySelectorAll("[data-payment-undo],[data-prior-undo]").forEach(btn=>btn.onclick=async()=>{
@@ -469,7 +478,7 @@
     const links=(d.fundingLinks||[]).filter(l=>l.month===month && l.accountId===account.id && !l.unlinked);
     dialog("تأكيد الحساب — "+month,
       (choices.length>1?select("account","اختر حسابًا واحدًا",choices.map(a=>[a.id,a.name]),account.id):"<h3>"+esc(account.name)+"</h3>")+
-      '<p>المتبقي للتأكيد: <strong>'+money(state.rest)+'</strong></p>'+select("from","حساب المصدر",accounts(d),defaultSource)+
+      '<p>المتبقي للتأكيد: <strong>'+money(state.rest)+'</strong></p>'+select("from","حساب المصدر",accounts(d),defaultSource)+'<p id="fund-route"></p>'+
       (state.planned===0?'<p>لا توجد مخصصات مرتبطة بهذا الحساب في الشهر المختار. راجع ربط البنود في الميزانية.</p>':state.rest===0?'<p>✓ هذا الحساب مؤكد بالفعل.</p>':
       '<label class="form-field"><span><input type="radio" name="mode" value="prior" required> دُفع سابقًا</span><small>إثبات فقط، دون تغيير الأرصدة.</small></label>'+
       '<label class="form-field"><span><input type="radio" name="mode" value="transfer" required> لم يُدفع بعد</span><small>بعد تنفيذ التحويل، أكّده هنا لخصمه من المصدر وإضافته لهذا الحساب.</small></label>'+
@@ -480,6 +489,7 @@
       field("date","تاريخ التنفيذ",A.today(),"date")+'</details></div>')+
       (links.length?'<details><summary>العمليات السابقة والتراجع</summary>'+links.map(l=>'<p>'+money(d.moves.find(m=>m.id===l.moveId)?.amount||0)+' <button type="button" class="button mini outline" data-unfund="'+esc(l.id)+'">تراجع</button></p>').join("")+'</details>':""),
       async v=>{
+        if(state.rest===0) return app.saveState(A.correctFundingSource(d,{month,accountId:account.id,from:v.from}));
         const next=A.confirmFunding(d,{id:operationId,month,accountId:account.id,mode:v.mode,
           amount:v.mode==="prior"?state.rest:v.amount,from:v.from,date:v.date||A.today()});
         return app.saveState(next);
@@ -490,8 +500,9 @@
       const v=Object.fromEntries(new FormData(form));
       const box=host.querySelector("#fund-transfer");if(box) box.hidden=v.mode!=="transfer";
       const source=host.querySelector("#fund-source-name");if(source) source.textContent=d.accounts.find(a=>a.id===v.from)?.name||"اختر المصدر من تعديل المبلغ أو الحساب";
-      submit.textContent=v.mode==="transfer"?"تأكيد تنفيذ التحويل":"تأكيد أنه دُفع سابقًا";
-      submit.disabled=!v.mode || !state.rest;
+      host.querySelector("#fund-route").textContent="من: "+A.accountLabel(d,v.from)+" • إلى: "+A.accountLabel(d,account.id)+(state.rest===0?". حفظ المصدر فقط لا ينفذ تحويلًا.":"");
+      submit.textContent=state.rest===0?"حفظ حساب المصدر فقط":v.mode==="transfer"?"تأكيد تنفيذ التحويل":"تأكيد أنه دُفع سابقًا";
+      submit.disabled=state.rest===0?(!v.from||v.from===d.fundingSources?.[month]?.[account.id]):!v.mode;
     };
     form.addEventListener("change",update);update();
     const picker=form.querySelector('[name="account"]');if(picker)picker.onchange=()=>funding(accountIds,picker.value);
