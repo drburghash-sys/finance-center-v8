@@ -1469,14 +1469,14 @@
           bankBanner +
           acct +
           '<div class="buttons">' +
-          button(
+          (fundingChildren.some(a => fundedAmount(a) > 0) ? button(
             allDone
               ? "إلغاء تأكيد جميع حسابات البنك"
               : "تأكيد جميع حسابات البنك",
             "toggleBankFunding",
             bankPick,
             allDone ? "outline" : "primary",
-          ) +
+          ) : '<p class="hint">لا يوجد تحويل مطلوب لهذه الجهة في هذا الشهر. يمكنك تعديل الرصيد الفعلي من زر الحساب.</p>') +
           button("إضافة حساب فرعي", "newAccount", null, "outline") +
           "</div>" +
           oldText +
@@ -2702,7 +2702,7 @@
     updateSmsVisibility();
     window.SalaryCountdown?.refresh(document, data.salaryCountdown);
     $("storageStatus").textContent =
-      "الإصدار ٣.٠.٧ • " +
+      "الإصدار ٣.٠.٨ • " +
       data.moves.length +
       " حركة مسجلة • " +
       data.accounts.length +
