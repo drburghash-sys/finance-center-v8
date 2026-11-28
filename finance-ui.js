@@ -420,188 +420,49 @@
         }),
     );
   }
-  function funding(accountIds) {
-    const app = g.FinanceApp,
-      d = app.get(),
-      month = app.period(),
-      planId = id(),
-      chunks = [];
-    for (const aid of accountIds) {
-      const a = d.accounts.find((x) => x.id === aid),
-        items = d.budget.filter(
-          (x) => x.month === month && A.accountFor(d, x)?.id === aid,
-        ),
-        planned = A.sum(items, (x) => x.amount),
-        links = (d.fundingLinks || []).filter(
-          (x) => x.month === month && x.accountId === aid && !x.unlinked,
-        ),
-        actual = (d.priorFunding?.[month]?.[aid] || 0) + (d.settledStarts?.[month]?.funding?.[aid] || 0) + links.reduce(
-          (s, l) =>
-            s +
-            (d.moves.find((m) => m.id === l.moveId && A.active(m))?.amount ||
-              0),
-          0,
-        ),
-        existing = d.moves.filter(
-          (m) =>
-            A.active(m) &&
-            m.kind === "transfer" &&
-            m.to === aid &&
-            !links.some((l) => l.moveId === m.id),
-        );
-      chunks.push(
-        "<fieldset><legend>" +
-          esc(a.name) +
-          "</legend><p>المخصص " +
-          money(planned) +
-          " • تحويلات مرتبطة " +
-          money(actual) +
-          " • الفرق " +
-          money(planned - actual) +
-          '</p><button type="button" class="button outline" data-direct="' + esc(aid) + '">تخطي — خصم من المصدر فقط</button>' +
-          links
-            .map(
-              (l) =>
-                "<p>" +
-                money(d.moves.find((m) => m.id === l.moveId)?.amount || 0) +
-                ' <button class="button mini danger" type="button" data-unfund="' +
-                esc(l.id) +
-                '">تراجع عن الربط / التمويل</button></p>',
-            )
-            .join("") +
-          select(
-            "mode_" + aid,
-            "الإجراء",
-            [
-              ["skip", "اترك دون تغيير"],
-              ["new", "تحويل فعلي جديد"],
-              ["external", "تخطي الإضافة للمستلم — سداد البنود من المصدر"],
-              ["prior", "تم سابقًا ومشمول في الأرصدة — دون خصم"],
-              ...existing.map((m) => [
-                m.id,
-                "ربط " + m.date + " " + money(m.amount),
-              ]),
-            ],
-            "skip",
-          ) +
-          select(
-            "from_" + aid,
-            "حساب المصدر / الحساب الذي دفع",
-            accounts(d),
-            d.settings.salaryAccountId,
-          ) +
-          field(
-            "amount_" + aid,
-            "المبلغ المحول بالفعل",
-            Math.max(0, planned - actual),
-            "number",
-            'min="0" step="0.01"',
-          ) +
-          field("date_" + aid, "تاريخ التحويل", A.today(), "date") +
-          '<p>تخطي الإضافة يسدد المتبقي من بنود المصروف والديون كاملة من المصدر دون زيادة هذا الحساب. الادخار والاستثمار يحتاجان تحويلًا فعليًا. إن أدخلت الرصيد بعد السداد اختر «تم سابقًا».</p>' +
-          items.filter(b=>b.type==="debt" && A.category(b)!=="loan").map(b=>select("debt_"+b.id,"الدين المسدد: "+b.name,[["","اختر البطاقة أو الدين"],...d.debts.filter(x=>A.category(b)==="visa"?x.kind==="credit":true).map(x=>[x.id,x.name])],b.debtId||"")).join("") +
-          "</fieldset>",
-      );
-    }
-    dialog(
-      "تأكيد تمويل الحسابات — " + month,
-      chunks.join("") +
-        '<label><input type="checkbox" name="confirmed" required> تحققت من المصدر والمبلغ والتنفيذ الفعلي لكل تحويل اخترته.</label>',
-      (v) => {
-        let staged = A.clone(d);
-        for (const aid of accountIds) {
-          const mode = v["mode_" + aid];
-          if (mode === "skip") continue;
-          if (staged.settledStarts?.[month]) throw Error("التوزيع مثبت ضمن نقطة البداية؛ سجل التحويل الإضافي من الحركات");
-          const items=staged.budget.filter(b=>b.month===month && A.accountFor(staged,b)?.id===aid);
-          if (mode === "external") {
-            staged=A.externalFunding(staged,{id:planId+":"+aid,accountId:aid,month,from:v["from_"+aid],date:v["date_"+aid],
-              payments:items.filter(b=>!["saving","investment"].includes(b.type) && A.paymentStatus(staged,b).rest>0).map(b=>({itemId:b.id,debtId:v["debt_"+b.id]}))});
-            continue;
-          }
-          if (mode === "prior") {
-            const already=(staged.priorFunding?.[month]?.[aid]||0)+A.sum((staged.fundingLinks||[]).filter(l=>l.month===month && l.accountId===aid && !l.unlinked),l=>staged.moves.find(m=>m.id===l.moveId && A.active(m))?.amount||0);
-            const plan=A.sum(items,b=>b.amount);
-            if(already>=plan) throw Error("الحساب مثبت سابقًا");
-            for(const b of items) if(A.paymentStatus(staged,b).rest>0) staged=A.acknowledgePaid(staged,{id:planId+":"+b.id,itemId:b.id,amount:A.paymentStatus(staged,b).rest,date:v["date_"+aid]});
-            staged.priorFunding ??= {};staged.priorFunding[month] ??= {};staged.priorFunding[month][aid]=(staged.priorFunding[month][aid]||0)+plan-already;
-            continue;
-          }
-          let m;
-          if (mode === "new") {
-            const plan=A.sum(items,b=>b.amount);
-            const funded=(staged.priorFunding?.[month]?.[aid]||0)+A.sum((staged.fundingLinks||[]).filter(l=>l.month===month && l.accountId===aid && !l.unlinked),l=>staged.moves.find(x=>x.id===l.moveId && A.active(x))?.amount||0);
-            if(plan>0 && funded>=plan) throw Error("تم تأكيد الحساب بالفعل؛ سجل التحويل الإضافي من الحركات");
-            m = {
-              id: id(),
-              operationKey: planId + "-" + aid,
-              date: v["date_" + aid],
-              budgetMonth: month,
-              kind: "transfer",
-              amount: A.sar(A.cents(v["amount_" + aid])),
-              from: v["from_" + aid],
-              to: aid,
-              source: "budget-funding-v3",
-              posted: true,
-            };
-            A.post(staged, m);
-          } else {
-            m = staged.moves.find(
-              (x) =>
-                x.id === mode &&
-                A.active(x) &&
-                x.kind === "transfer" &&
-                x.to === aid,
-            );
-            if (!m) throw Error("الحركة لم تعد صالحة");
-            if (
-              (staged.fundingLinks || []).some(
-                (l) => !l.unlinked && l.moveId === m.id,
-              )
-            )
-              throw Error("التحويل مرتبط بتمويل سابق؛ راجع السجل");
-          }
-          staged.fundingLinks ??= [];
-          staged.fundingLinks.push({
-            id: id(),
-            month,
-            accountId: aid,
-            moveId: m.id,
-            owned: mode === "new",
-            at: new Date().toISOString(),
-          });
-        }
-        Object.assign(d, staged);
-        return app.save();
-      },
-    );
-    for(const aid of accountIds) {
-      const mode=host.querySelector('[name="mode_'+aid+'"]');
-      const amount=host.querySelector('[name="amount_'+aid+'"]');
-      mode.onchange=()=>{amount.closest("label").hidden=["external","prior"].includes(mode.value);};
-    }
-    host.querySelectorAll("[data-direct]").forEach(btn => {
-      btn.onclick=()=>{const select=host.querySelector('[name="mode_'+btn.dataset.direct+'"]');select.value="external";select.onchange();};
+  function funding(accountIds, selectedId) {
+    const app=g.FinanceApp,d=app.get(),month=app.period();
+    const choices=accountIds.map(aid=>d.accounts.find(a=>a.id===aid)).filter(Boolean);
+    const account=choices.find(a=>a.id===selectedId) || choices.find(a=>A.fundingStatus(d,month,a.id).rest>0) || choices[0];
+    if(!account) throw Error("لا يوجد حساب محدد");
+    const state=A.fundingStatus(d,month,account.id),operationId=id();
+    const defaultSource=d.accounts.some(a=>a.id===d.settings.salaryAccountId && a.id!==account.id)?d.settings.salaryAccountId:
+      d.accounts.find(a=>a.id!==account.id && a.role==="bank")?.id || "";
+    const links=(d.fundingLinks||[]).filter(l=>l.month===month && l.accountId===account.id && !l.unlinked);
+    dialog("تأكيد الحساب — "+month,
+      (choices.length>1?select("account","اختر حسابًا واحدًا",choices.map(a=>[a.id,a.name]),account.id):"<h3>"+esc(account.name)+"</h3>")+
+      '<p>المتبقي للتأكيد: <strong>'+money(state.rest)+'</strong></p>'+
+      (state.planned===0?'<p>لا توجد مخصصات مرتبطة بهذا الحساب في الشهر المختار. راجع ربط البنود في الميزانية.</p>':state.rest===0?'<p>✓ هذا الحساب مؤكد بالفعل.</p>':
+      '<label class="form-field"><span><input type="radio" name="mode" value="prior" required> دُفع سابقًا</span><small>إثبات فقط، دون تغيير الأرصدة.</small></label>'+
+      '<label class="form-field"><span><input type="radio" name="mode" value="transfer" required> يحتاج تحويل</span><small>بعد تنفيذ التحويل، أكّده هنا لخصمه من المصدر وإضافته لهذا الحساب.</small></label>'+
+      '<div id="fund-transfer" hidden><p>التحويل من <strong id="fund-source-name"></strong> إلى '+esc(account.name)+'.</p>'+
+      '<details><summary>تعديل المبلغ أو حساب المصدر</summary>'+
+      field("amount","مبلغ التحويل",state.rest,"number",'min="0.01" step="0.01"')+
+      select("from","حساب المصدر",accounts(d).filter(a=>a[0]!==account.id),defaultSource)+
+      field("date","تاريخ التنفيذ",A.today(),"date")+'</details></div>')+
+      (links.length?'<details><summary>العمليات السابقة والتراجع</summary>'+links.map(l=>'<p>'+money(d.moves.find(m=>m.id===l.moveId)?.amount||0)+' <button type="button" class="button mini outline" data-unfund="'+esc(l.id)+'">تراجع</button></p>').join("")+'</details>':""),
+      async v=>{
+        const next=A.confirmFunding(d,{id:operationId,month,accountId:account.id,mode:v.mode,
+          amount:v.mode==="prior"?state.rest:v.amount,from:v.from,date:v.date||A.today()});
+        return app.saveState(next);
+      });
+    const form=host.querySelector("form"),submit=form.querySelector('[type="submit"]');submit.disabled=true;
+    const update=()=>{
+      const v=Object.fromEntries(new FormData(form));
+      const box=host.querySelector("#fund-transfer");if(box) box.hidden=v.mode!=="transfer";
+      const source=host.querySelector("#fund-source-name");if(source) source.textContent=d.accounts.find(a=>a.id===v.from)?.name||"اختر المصدر من تعديل المبلغ أو الحساب";
+      submit.textContent=v.mode==="transfer"?"تأكيد تنفيذ التحويل":"تأكيد أنه دُفع سابقًا";
+      submit.disabled=!v.mode || !state.rest;
+    };
+    form.addEventListener("change",update);update();
+    const picker=form.querySelector('[name="account"]');if(picker)picker.onchange=()=>funding(accountIds,picker.value);
+    host.querySelectorAll("[data-unfund]").forEach(btn=>btn.onclick=async()=>{
+      if(!confirm("التراجع عن هذه العملية؟"))return;
+      const next=A.clone(d),l=next.fundingLinks.find(x=>x.id===btn.dataset.unfund);
+      if(l.owned)A.reverse(next,l.moveId);
+      l.unlinked=true;A.audit(next,"unlink-funding",{link:l});
+      if(await app.saveState(next))funding(accountIds,account.id);
     });
-    host.querySelectorAll("[data-unfund]").forEach(
-      (btn) =>
-        (btn.onclick = async () => {
-          if (
-            !confirm(
-              "التراجع عن التمويل؟ الحركة البنكية المستقلة سيُفك ربطها فقط.",
-            )
-          )
-            return;
-          const l = d.fundingLinks.find((x) => x.id === btn.dataset.unfund);
-          if (l.owned) A.reverse(d, l.moveId);
-          A.audit(d, "unlink-funding", { link: l });
-          l.unlinked = true;
-          if (await app.save()) {
-            host.remove();
-            funding(accountIds);
-          }
-        }),
-    );
   }
   function salary() {
     const app=g.FinanceApp, d=app.get(), current=A.today().slice(0,7),

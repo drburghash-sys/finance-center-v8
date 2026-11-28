@@ -826,7 +826,41 @@
     audit(d,"salary-received",{after:d.salaryReceipts[r.month]});
     return d;
   }
+  function fundingStatus(d, month, accountId) {
+    const items=d.budget.filter(b=>b.month===month && accountFor(d,b)?.id===accountId);
+    const planned=sum(items,b=>b.amount);
+    const links=(d.fundingLinks||[]).filter(l=>l.month===month && l.accountId===accountId && !l.unlinked);
+    const funded=sar(val(d.priorFunding?.[month]?.[accountId])+val(d.settledStarts?.[month]?.funding?.[accountId])+val(sum(links,l=>d.moves.find(m=>m.id===l.moveId && active(m))?.amount||0)));
+    return {planned,funded,rest:Math.max(0,sar(val(planned)-val(funded)))};
+  }
+  function confirmFunding(input,r) {
+    const d=clone(input),status=fundingStatus(d,r.month,r.accountId);
+    if(!Number.isFinite(idx(r.month)) || !d.accounts.some(a=>a.id===r.accountId)) throw Error("اختر الحساب والشهر الصحيحين");
+    if(!status.planned) throw Error("لا توجد مخصصات لهذا الحساب في الشهر المختار؛ اربط البنود بالحساب من الميزانية أولًا");
+    if(!status.rest) throw Error("هذا الحساب مؤكد بالفعل");
+    if(!["prior","transfer"].includes(r.mode)) throw Error("اختر دُفع سابقًا أو يحتاج تحويل");
+    const amount=sar(cents(r.amount ?? status.rest));
+    if(amount<=0 || val(amount)>val(status.rest)) throw Error("المبلغ يتجاوز المتبقي");
+    const candidates=d.moves.filter(m=>active(m) && m.kind==="transfer" && m.to===r.accountId && val(m.amount)===val(amount) &&
+      ((m.budgetMonth||m.date.slice(0,7))===r.month || Math.abs(new Date(m.date)-new Date(r.month+"-01"))<=7*86400000) &&
+      !(d.fundingLinks||[]).some(l=>!l.unlinked && l.moveId===m.id));
+    if(candidates.length>1) throw Error("توجد تحويلات متطابقة؛ راجع سجل الحركات قبل التأكيد");
+    if(candidates.length===1) {
+      d.fundingLinks ??= [];d.fundingLinks.push({id:r.id,month:r.month,accountId:r.accountId,moveId:candidates[0].id,owned:false,at:stamp()});
+      audit(d,"link-existing-funding",{moveId:candidates[0].id,month:r.month});
+    } else if(r.mode==="prior") {
+      d.priorFunding ??= {};d.priorFunding[r.month] ??= {};
+      d.priorFunding[r.month][r.accountId]=sar(val(d.priorFunding[r.month][r.accountId])+val(amount));
+      audit(d,"acknowledge-funding",{accountId:r.accountId,month:r.month,amount,message:"دُفع سابقًا؛ لا تغيير للأرصدة أو سداد البنود"});
+    } else {
+      if(val(balance(d,r.from))<val(amount)) throw Error("رصيد المصدر لا يكفي للتحويل");
+      post(d,{id:r.id,operationKey:"funding:"+r.id,kind:"transfer",amount,from:r.from,to:r.accountId,date:r.date,budgetMonth:r.month,source:"budget-funding-v3",posted:true});
+      d.fundingLinks ??= [];d.fundingLinks.push({id:"link:"+r.id,month:r.month,accountId:r.accountId,moveId:r.id,owned:true,at:stamp()});
+    }
+    return d;
+  }
   g.Accounting = {
+    fundingStatus, confirmFunding,
     confirmSalary, salaryStatus,
     freshStart, acknowledgePaid, externalFunding,
     settledStart,
