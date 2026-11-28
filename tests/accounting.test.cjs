@@ -720,3 +720,39 @@ test("salary included acknowledgement leaves balance intact and prevents a futur
   A.post(d,move("existing","income",10000,{to:"salary",budgetMonth:"2026-12",category:"راتب"}));
   assert.throws(()=>A.confirmSalary(d,r));
 });
+
+test("simple funding prior confirms one account without cash changes or false bill payment",()=>{
+  const d=fixture();const r={id:"simpleprior",month:"2026-12",accountId:"bills",mode:"prior"};
+  const n=A.confirmFunding(d,r);
+  assert.equal(A.balance(n,"salary"),20000);assert.equal(A.balance(n,"bills"),0);
+  assert.equal(n.moves.length,0);assert.equal(A.fundingStatus(n,"2026-12","bills").rest,0);
+  assert.equal(A.paymentStatus(n,n.budget[0]).rest,1000);
+  assert.equal(A.fundingStatus(n,"2026-12","reserve").funded,0);
+  assert.throws(()=>A.confirmFunding(n,{...r,id:"repeat"}));
+});
+
+test("simple funding transfer conserves cash and settles only transferred amount",()=>{
+  const d=fixture();const r={id:"simpletransfer",month:"2026-12",accountId:"bills",mode:"transfer",amount:400,from:"salary",date:"2026-11-28"};
+  const n=A.confirmFunding(d,r);
+  assert.equal(A.balance(n,"salary"),19600);assert.equal(A.balance(n,"bills"),400);
+  assert.equal(A.fundingStatus(n,"2026-12","bills").rest,600);
+  assert.equal(A.paymentStatus(n,n.budget[0]).paid,0);
+  const final=A.confirmFunding(n,{...r,id:"rest",mode:"prior",amount:600});
+  assert.equal(A.fundingStatus(final,"2026-12","bills").rest,0);
+  assert.equal(A.balance(final,"salary"),19600);
+});
+
+test("simple funding reuses existing transfer rather than posting twice",()=>{
+  const d=fixture();A.post(d,move("existingtransfer","transfer",1000,{from:"salary",to:"bills",budgetMonth:"2026-12"}));
+  const n=A.confirmFunding(d,{id:"linkexisting",month:"2026-12",accountId:"bills",mode:"transfer",amount:1000,from:"salary",date:"2026-11-28"});
+  assert.equal(n.moves.length,1);assert.equal(A.balance(n,"salary"),19000);
+  assert.equal(n.fundingLinks[0].owned,false);assert.equal(A.fundingStatus(n,"2026-12","bills").rest,0);
+});
+
+test("simple funding rejects zero allocations, invalid choices and insufficient cash atomically",()=>{
+  const d=fixture(),r={id:"invalidfund",month:"2026-12",accountId:"bills",mode:"transfer",amount:1000,from:"bills",date:"2026-11-28"};
+  assert.throws(()=>A.confirmFunding(d,r));
+  assert.throws(()=>A.confirmFunding(d,{...r,mode:"unknown"}));
+  assert.throws(()=>A.confirmFunding(d,{...r,accountId:"reserve",mode:"prior"}));
+  assert.equal(d.moves.length,0);
+});
