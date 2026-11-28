@@ -101,7 +101,7 @@
   let data = store.get();
   let page = "home",
     sub = "summary",
-    period = month(),
+    period = data.trackingStartMonth || month(),
     modalType = "",
     editingId = "",
     chartKind = "expenses",
@@ -298,6 +298,17 @@
     busy: () => saving,
     bankGroup,
     save: keep,
+    freshStart: async (m) => {
+      if (saving) throw Error("انتظر اكتمال الحفظ");
+      saving=true;
+      try {data=await store.freshStartLocked(m);period=m;page="accounts";sub="balances";render();return true;}
+      finally {saving=false;}
+    },
+    restoreFreshStart: async () => {
+      const raw=localStorage.getItem(KEY+"_before_fresh_start");
+      if (!raw) throw Error("لا يوجد أرشيف بداية جديدة");
+      data=await store.replaceLocked(JSON.parse(raw));render();
+    },
     saveState: async (next) => { data = next; return keep(); },
     replace: async (d) => {
       data = await store.replaceLocked(d);
@@ -1268,7 +1279,7 @@
           )?.amount || 0),
         0,
       );
-    return fundedAmount(a) > 0 && actual + (data.settledStarts?.[period]?.funding?.[a.id] || 0) >= fundedAmount(a);
+    return fundedAmount(a) > 0 && actual + (data.settledStarts?.[period]?.funding?.[a.id] || 0) + (data.priorFunding?.[period]?.[a.id] || 0) >= fundedAmount(a);
   }
   function bankGroups() {
     const names = [...new Set(data.accounts.map(bankGroup))];
@@ -2628,6 +2639,8 @@
       '<p class="body-note">يدعم هذا القسم استيراد النسخة الشاملة New_Finance_Full دفعة واحدة: جميع الحسابات وأرصدة الفيزا ودراهم، الحركات السابقة، أشهر الميزانية، سجل الديون، أهداف المدارس والسيارة والمشاريع، وحاسبة الراتب. الأرصدة تبدأ من تاريخ النسخة ولا يُعاد خصم أي حركة تاريخية منها. لا تُرفع الملفات إلى GitHub.</p><div class="buttons">' +
         button("تصدير جميع بيانات هذا المركز", "export", null, "primary") +
         button("تهيئة بعد التوزيع والسداد", "settledStart", null, "outline") +
+        button("بداية جديدة بأرصدة صفر", "freshStart", null, "outline") +
+        (localStorage.getItem(KEY+"_before_fresh_start") ? button("استعادة أرشيف ما قبل البداية الجديدة", "restoreFreshStart", null, "outline") : "") +
         button(
           "استيراد V8 المحفوظ على هذا الجهاز",
           "importLocalV8",
@@ -2697,7 +2710,7 @@
     updateSmsVisibility();
     window.SalaryCountdown?.refresh(document, data.salaryCountdown);
     $("storageStatus").textContent =
-      "الإصدار ٣.٠.٣ • " +
+      "الإصدار ٣.٠.٤ • " +
       data.moves.length +
       " حركة مسجلة • " +
       data.accounts.length +

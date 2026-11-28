@@ -78,6 +78,14 @@
   }
   const accounts = (d) =>
     d.accounts.map((a) => [a.id, a.name + " — " + money(A.balance(d, a))]);
+  function freshStart() {
+    const app=g.FinanceApp;
+    dialog("بداية جديدة بأرصدة صفر",
+      '<p>يُؤرشف السجل الحالي كاملًا على هذا الجهاز، ثم تبدأ الحسابات والديون بأرصدة صفر وبلا حركات. تبقى أسماء الحسابات والبطاقات والقروض وخطة الشهر المختار وأهدافك. ستدخل الأرصدة الحالية يدويًا بعد ذلك. راتب شهر البداية مستلم ومشمول في الأرصدة التي ستدخلها؛ لا تضفه مرة أخرى.</p>'+
+      field("month","أول شهر للمتابعة",C.ym(C.idx(A.today().slice(0,7))+1),"month","required")+
+      '<label><input type="checkbox" required> أوافق على أرشفة السجل الحالي وبدء سجل جديد بأرصدة صفر.</label>',
+      v=>app.freshStart(v.month));
+  }
   function settledStart() {
     const app = g.FinanceApp, d = app.get(), month = app.period();
     if (d.settledStarts?.[month]) throw Error("تهيئة هذا الشهر معتمدة بالفعل");
@@ -192,9 +200,10 @@
           d.settings.salaryAccountId || A.accountFor(d, b)?.id,
         ) +
         field("date", "تاريخ الخصم", A.today(), "date", "required") +
-        fields +
+        select("paymentMode","طريقة الإثبات",[["new","سداد فعلي — خصم من المصدر فقط"],["prior","تم سابقًا ومشمول في الرصيد — دون خصم"]],"new") + fields +
         '<p id="loan-total"></p><label><input name="confirmed" type="checkbox" required> أؤكد حدوث الخصم البنكي للدفعات المحددة وعدم تسجيلها سابقًا.</label>',
       (v) => {
+        if (v.paymentMode === "prior") return app.saveState(A.acknowledgePaid(d,{itemId:b.id,amount:A.paymentStatus(d,b).rest,date:v.date,id:operationKey}));
         const next = A.payLoanGroup(d, {
           itemId: b.id,
           from: v.from,
@@ -293,8 +302,10 @@
       money(status.rest) +
       ". تعديل الخطة لا يغير الدفعات السابقة.</p>" +
       linked +
+      (!saving ? '<button type="button" class="button outline" data-item-direct>تخطي — خصم من الحساب فقط</button>' : "") +
       select("existing", "اربط حركة مسجلة بدل إنشاء أخرى", [
-        ["", "دفعة جديدة مؤكدة"],
+        ["", saving ? "تحويل ادخار / استثمار فعلي" : "تخطي الإضافة للمستلم — دفع من الحساب المحدد"],
+        ["prior", "تم سابقًا ومشمول في الرصيد — دون خصم"],
         ...candidate.map((m) => [
           m.id,
           m.date + " " + m.kind + " " + money(m.amount),
@@ -303,7 +314,7 @@
       field(
         "amount",
         "المبلغ الفعلي",
-        status.rest || b.amount,
+        status.rest,
         "number",
         'min="0.01" step="0.01" required',
       ) +
@@ -338,6 +349,8 @@
     if (status.complete && d.settledStarts?.[b.month]?.items?.[b.id]) throw Error("البند مسدد ضمن نقطة البداية؛ لا يحتاج خصمًا جديدًا");
     const operationKey = id();
     dialog("دفع البند: " + b.name, body, (v) => {
+      if (A.paymentStatus(d,b).complete) throw Error("البند مسدد بالفعل؛ لا يحتاج تأكيدًا جديدًا");
+      if (v.existing === "prior") return app.saveState(A.acknowledgePaid(d,{itemId:b.id,amount:v.amount,date:v.date,id:operationKey}));
       if (v.existing) {
         const m = d.moves.find((x) => x.id === v.existing);
         if (
@@ -381,6 +394,8 @@
       }
       return app.save();
     });
+    const directButton=host.querySelector("[data-item-direct]");
+    if(directButton) directButton.onclick=()=>{host.querySelector('[name="existing"]').value="";};
     host.querySelectorAll("[data-v3-undo]").forEach(
       (btn) =>
         (btn.onclick = async () => {
@@ -420,7 +435,7 @@
         links = (d.fundingLinks || []).filter(
           (x) => x.month === month && x.accountId === aid && !x.unlinked,
         ),
-        actual = (d.settledStarts?.[month]?.funding?.[aid] || 0) + links.reduce(
+        actual = (d.priorFunding?.[month]?.[aid] || 0) + (d.settledStarts?.[month]?.funding?.[aid] || 0) + links.reduce(
           (s, l) =>
             s +
             (d.moves.find((m) => m.id === l.moveId && A.active(m))?.amount ||
@@ -443,7 +458,7 @@
           money(actual) +
           " • الفرق " +
           money(planned - actual) +
-          "</p>" +
+          '</p><button type="button" class="button outline" data-direct="' + esc(aid) + '">تخطي — خصم من المصدر فقط</button>' +
           links
             .map(
               (l) =>
@@ -460,6 +475,8 @@
             [
               ["skip", "اترك دون تغيير"],
               ["new", "تحويل فعلي جديد"],
+              ["external", "تخطي الإضافة للمستلم — سداد البنود من المصدر"],
+              ["prior", "تم سابقًا ومشمول في الأرصدة — دون خصم"],
               ...existing.map((m) => [
                 m.id,
                 "ربط " + m.date + " " + money(m.amount),
@@ -469,8 +486,8 @@
           ) +
           select(
             "from_" + aid,
-            "مصدر التحويل الفعلي",
-            accounts(d).filter((x) => x[0] !== aid),
+            "حساب المصدر / الحساب الذي دفع",
+            accounts(d),
             d.settings.salaryAccountId,
           ) +
           field(
@@ -481,6 +498,8 @@
             'min="0" step="0.01"',
           ) +
           field("date_" + aid, "تاريخ التحويل", A.today(), "date") +
+          '<p>تخطي الإضافة يسدد المتبقي من بنود المصروف والديون كاملة من المصدر دون زيادة هذا الحساب. الادخار والاستثمار يحتاجان تحويلًا فعليًا. إن أدخلت الرصيد بعد السداد اختر «تم سابقًا».</p>' +
+          items.filter(b=>b.type==="debt" && A.category(b)!=="loan").map(b=>select("debt_"+b.id,"الدين المسدد: "+b.name,[["","اختر البطاقة أو الدين"],...d.debts.filter(x=>A.category(b)==="visa"?x.kind==="credit":true).map(x=>[x.id,x.name])],b.debtId||"")).join("") +
           "</fieldset>",
       );
     }
@@ -489,13 +508,30 @@
       chunks.join("") +
         '<label><input type="checkbox" name="confirmed" required> تحققت من المصدر والمبلغ والتنفيذ الفعلي لكل تحويل اخترته.</label>',
       (v) => {
-        const staged = A.clone(d);
+        let staged = A.clone(d);
         for (const aid of accountIds) {
           const mode = v["mode_" + aid];
           if (mode === "skip") continue;
           if (staged.settledStarts?.[month]) throw Error("التوزيع مثبت ضمن نقطة البداية؛ سجل التحويل الإضافي من الحركات");
+          const items=staged.budget.filter(b=>b.month===month && A.accountFor(staged,b)?.id===aid);
+          if (mode === "external") {
+            staged=A.externalFunding(staged,{id:planId+":"+aid,accountId:aid,month,from:v["from_"+aid],date:v["date_"+aid],
+              payments:items.filter(b=>!["saving","investment"].includes(b.type) && A.paymentStatus(staged,b).rest>0).map(b=>({itemId:b.id,debtId:v["debt_"+b.id]}))});
+            continue;
+          }
+          if (mode === "prior") {
+            const already=(staged.priorFunding?.[month]?.[aid]||0)+A.sum((staged.fundingLinks||[]).filter(l=>l.month===month && l.accountId===aid && !l.unlinked),l=>staged.moves.find(m=>m.id===l.moveId && A.active(m))?.amount||0);
+            const plan=A.sum(items,b=>b.amount);
+            if(already>=plan) throw Error("الحساب مثبت سابقًا");
+            for(const b of items) if(A.paymentStatus(staged,b).rest>0) staged=A.acknowledgePaid(staged,{id:planId+":"+b.id,itemId:b.id,amount:A.paymentStatus(staged,b).rest,date:v["date_"+aid]});
+            staged.priorFunding ??= {};staged.priorFunding[month] ??= {};staged.priorFunding[month][aid]=(staged.priorFunding[month][aid]||0)+plan-already;
+            continue;
+          }
           let m;
           if (mode === "new") {
+            const plan=A.sum(items,b=>b.amount);
+            const funded=(staged.priorFunding?.[month]?.[aid]||0)+A.sum((staged.fundingLinks||[]).filter(l=>l.month===month && l.accountId===aid && !l.unlinked),l=>staged.moves.find(x=>x.id===l.moveId && A.active(x))?.amount||0);
+            if(plan>0 && funded>=plan) throw Error("تم تأكيد الحساب بالفعل؛ سجل التحويل الإضافي من الحركات");
             m = {
               id: id(),
               operationKey: planId + "-" + aid,
@@ -539,6 +575,14 @@
         return app.save();
       },
     );
+    for(const aid of accountIds) {
+      const mode=host.querySelector('[name="mode_'+aid+'"]');
+      const amount=host.querySelector('[name="amount_'+aid+'"]');
+      mode.onchange=()=>{amount.closest("label").hidden=["external","prior"].includes(mode.value);};
+    }
+    host.querySelectorAll("[data-direct]").forEach(btn => {
+      btn.onclick=()=>{const select=host.querySelector('[name="mode_'+btn.dataset.direct+'"]');select.value="external";select.onchange();};
+    });
     host.querySelectorAll("[data-unfund]").forEach(
       (btn) =>
         (btn.onclick = async () => {
@@ -829,6 +873,8 @@
           "saveAutoSalary",
           "planningSettings",
           "settledStart",
+          "freshStart",
+          "restoreFreshStart",
         ].includes(action)
       )
         return;
@@ -836,7 +882,11 @@
       e.stopImmediatePropagation();
       try {
         const d = g.FinanceApp.get();
-        if (action === "settledStart") settledStart();
+        if (action === "freshStart") freshStart();
+        else if (action === "restoreFreshStart") {
+          if(confirm("استعادة الأرشيف؟ سيُحفظ السجل الحالي كنسخة قبل الاستعادة.")) g.FinanceApp.restoreFreshStart().catch(err=>alert(err.message));
+        }
+        else if (action === "settledStart") settledStart();
         else if (action === "planningSettings") planning();
         else if (
           ["payBudgetV3", "confirmVisaPayment", "toggleBudgetPaid"].includes(

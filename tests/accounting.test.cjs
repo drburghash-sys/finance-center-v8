@@ -640,3 +640,58 @@ test("settled opening stores a dedicated rollback copy and rejects bypassed dupl
   assert.throws(()=>st.commit(bad));
   assert.equal(st.get().moves.length,0);
 });
+
+test("fresh December archives exact old document and zeros all actual balances",()=>{
+  const d=fixture();d.budget.push({...d.budget[0],id:"old",month:"2026-11"});
+  A.post(d,move("oldmove","expense",100,{from:"salary"}));
+  d.settledStarts={};d.priorPayments=[];d.surplusPlans={"2026-11":{closed:true}};
+  const saved=JSON.stringify(d),mem=new Map([[A.KEY,saved]]);
+  const st=A.storage({getItem:k=>mem.get(k)||null,setItem:(k,v)=>mem.set(k,v)});
+  const n=st.freshStart("2026-12");
+  assert.equal(mem.get(A.KEY+"_before_fresh_start"),saved);
+  assert.equal(n.moves.length,0);assert.equal(n.budget.length,1);
+  for(const a of n.accounts)assert.equal(A.balance(n,a),0);
+  for(const a of n.debts)assert.equal(A.debtBalance(n,a),0);
+  assert.equal(n.trackingStartMonth,"2026-12");
+  assert.equal(n.openingSalary.amount,10000);
+  assert.throws(()=>st.freshStart("2026-12"));
+  st.replace(JSON.parse(mem.get(A.KEY+"_before_fresh_start")));
+  assert.deepEqual(st.get(),d);
+});
+
+test("fresh start archive failure never overwrites active data",()=>{
+  const d=fixture(),raw=JSON.stringify(d);let persisted=raw;
+  const st=A.storage({getItem:()=>persisted,setItem:(k,v)=>{if(k!==A.KEY)throw Error("quota");persisted=v;}});
+  assert.throws(()=>st.freshStart("2026-12"));assert.equal(persisted,raw);
+});
+
+test("skip receiver debits source only, settles expense once and reverses correctly",()=>{
+  const d=fixture(),r={id:"direct",month:"2026-12",accountId:"bills",from:"salary",date:"2026-11-28",payments:[{itemId:"b"}]};
+  const n=A.externalFunding(d,r);
+  assert.equal(A.balance(n,"salary"),19000);assert.equal(A.balance(n,"bills"),0);
+  assert.equal(A.paymentStatus(n,n.budget[0]).paid,1000);
+  assert.equal(d.moves.length,0);assert.throws(()=>A.externalFunding(n,{...r,id:"repeat"}));
+  A.reverse(n,n.moves[0].id);assert.equal(A.balance(n,"salary"),20000);
+  assert.equal(A.paymentStatus(n,n.budget[0]).paid,0);
+  const poor=structuredClone(d);poor.accounts[0].opening=10;
+  assert.throws(()=>A.externalFunding(poor,r));assert.equal(poor.moves.length,0);
+});
+
+test("already paid acknowledgement has no cash or debt effect and rejects repetition",()=>{
+  const d=fixture();const r={id:"prior",itemId:"b",amount:1000,date:"2026-11-28"};
+  const n=A.acknowledgePaid(d,r);
+  assert.equal(A.balance(n,"salary"),20000);assert.equal(A.balance(n,"bills"),0);
+  assert.equal(n.moves.length,0);assert.equal(A.paymentStatus(n,n.budget[0]).rest,0);
+  assert.throws(()=>A.acknowledgePaid(n,{...r,id:"repeat"}));
+});
+
+test("skip receiver supports grouped loans and selected visa without crediting receiver",()=>{
+  const d=fixture();d.budget=[{id:"loans",name:"قروض",type:"debt",financialCategory:"loan",month:"2026-12",amount:1000,bankAccountId:"bills"},{id:"visa",name:"فيزا",type:"debt",financialCategory:"visa",month:"2026-12",amount:500,bankAccountId:"bills"}];
+  const n=A.externalFunding(d,{id:"debtbatch",month:"2026-12",date:"2026-11-28",accountId:"bills",from:"salary",payments:[{itemId:"loans"},{itemId:"visa",debtId:"card"}]});
+  assert.equal(A.balance(n,"salary"),18500);assert.equal(A.balance(n,"bills"),0);
+  assert.equal(A.debtBalance(n,"loan"),100000);assert.equal(A.debtBalance(n,"card"),6500);
+  assert.equal(A.accountFor(n,n.budget[0]).id,"bills");
+  assert.equal(A.paymentStatus(n,n.budget[0]).rest,0);assert.equal(A.paymentStatus(n,n.budget[1]).rest,0);
+  const prior=A.acknowledgePaid(d,{id:"pastloan",date:"2026-11-28",itemId:"loans",amount:1000});
+  assert.equal(A.loanInstallments(prior,prior.budget[0])[0].due,0);
+});
