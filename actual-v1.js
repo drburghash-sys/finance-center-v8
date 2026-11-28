@@ -1251,14 +1251,11 @@
   }
   function fundedItems(a) {
     return data.budget.filter(
-      (x) => x.month === period && linkedAccount(x)?.id === a.id,
+      (x) => x.month === period && window.Accounting.accountFor(data, x)?.id === a.id,
     );
   }
   function fundedAmount(a) {
-    return fundedItems(a).reduce(
-      (z, x) => z + Math.max(0, Number(x.amount) || 0),
-      0,
-    );
+    return window.Accounting.fundingStatus(data, period, a.id).planned;
   }
   function fundingSig(a) {
     return JSON.stringify(
@@ -1268,19 +1265,10 @@
     );
   }
   function isAccountConfirmed(a) {
-    const xs = (data.fundingLinks || []).filter(
-        (x) => x.month === period && x.accountId === a.id && !x.unlinked,
-      ),
-      actual = xs.reduce(
-        (s, x) =>
-          s +
-          (data.moves.find(
-            (m) => m.id === x.moveId && window.Accounting.active(m),
-          )?.amount || 0),
-        0,
-      );
-    return fundedAmount(a) > 0 && actual + (data.settledStarts?.[period]?.funding?.[a.id] || 0) + (data.priorFunding?.[period]?.[a.id] || 0) >= fundedAmount(a);
+    const status = window.Accounting.fundingStatus(data, period, a.id);
+    return status.planned > 0 && status.rest === 0;
   }
+
   function bankGroups() {
     const names = [...new Set(data.accounts.map(bankGroup))];
     return names.map((name) => ({

@@ -46,3 +46,27 @@ test("live pages do not invoke obsolete automatic migration or parallel forecast
     assert.ok(!html.includes('src="' + old));
   assert.ok(html.includes("accounting-engine.js?v=3"));
 });
+
+test("account confirmation display matches saved funding status with halalas and partial transfers", () => {
+  const context = { window: {} };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(root, "accounting-engine.js"), "utf8"), context);
+  const source = fs.readFileSync(path.join(root, "actual-v1.js"), "utf8");
+  const display = source.slice(source.indexOf("  function isAccountConfirmed(a)"), source.indexOf("  function bankGroups()"));
+  context.window.Accounting = context.Accounting;
+  context.period = "2026-12";
+  context.data = {
+    accounts: [{ id: "bills" }],
+    budget: [0.1, 0.2].map((amount, i) => ({ id: String(i), month: "2026-12", bankAccountId: "bills", amount })),
+    moves: [], priorFunding: { "2026-12": { bills: 0.3 } }
+  };
+  vm.runInContext(display, context);
+  assert.equal(vm.runInContext('isAccountConfirmed(data.accounts[0])', context), true);
+  context.data.priorFunding["2026-12"].bills = 0.1;
+  assert.equal(vm.runInContext('isAccountConfirmed(data.accounts[0])', context), false);
+  context.data.moves = [{ id: "transfer", kind: "transfer", amount: 0.2, posted: true }];
+  context.data.fundingLinks = [{ month: "2026-12", accountId: "bills", moveId: "transfer" }];
+  assert.equal(vm.runInContext('isAccountConfirmed(data.accounts[0])', context), true);
+  context.period = "2027-01";
+  assert.equal(vm.runInContext('isAccountConfirmed(data.accounts[0])', context), false);
+});
